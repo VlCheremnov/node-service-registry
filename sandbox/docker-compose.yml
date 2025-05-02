@@ -1,0 +1,21 @@
+services:
+  ### Сервис gateway
+  sandbox-server:
+    container_name: sandbox-server
+    command: npm run dev
+    ports:
+      - "${PORT}:${PORT}"
+    env_file:
+      - ./.env
+    image: node:20
+    working_dir: /packages/service-registry
+    volumes:
+      - ../src:/packages/service-registry/src
+      - ../package.json:/packages/service-registry/package.json
+      - ../tsconfig.json:/packages/service-registry/tsconfig.json
+      - ./.env:/packages/service-registry/.env
+      - ../node_modules:/packages/service-registry/node_modules
+
+networks:
+  registry:
+    name: registry
