@@ -2,7 +2,6 @@
   "compilerOptions": {
     "target": "ES2022",
     "module": "ESNext",
-    "moduleResolution": "bundler",
     "lib": ["ES2022"],
     "strict": true,
     "esModuleInterop": true,
@@ -20,7 +19,7 @@
     "forceConsistentCasingInFileNames": true,
     "noImplicitAny": false,
     "strictBindCallApply": false,
-    "noFallthroughCasesInSwitch": false,
-    "include": ["src/**/*"]
-  }
+    "noFallthroughCasesInSwitch": false
+  },
+  "include": ["src/**/*"]
 }
