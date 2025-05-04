@@ -7,6 +7,12 @@ import {
 	GetServiceQuery,
 	DeleteServiceParams,
 } from '../schemas'
+import {
+	delService,
+	getServiceList,
+	putService,
+	servicesDB,
+} from '../../common/utils/database'
 
 export const registerController = async (
 	req: FastifyRequest,
@@ -27,6 +33,10 @@ export const registerController = async (
 		lastHeartbeat: Date.now(),
 		serviceAvailable: true,
 	}
+
+	await putService(info)
+
+	// servicesDB.put()
 
 	// services.set(name, info)
 	//
@@ -50,6 +60,8 @@ export const deleteRegisterController = async (
 	reply: FastifyReply
 ) => {
 	const { name } = req.params as DeleteServiceParams
+
+	await delService(name)
 
 	// if (!services.has(name)) return reply.code(404).send({ error: 'not_found' })
 	//
@@ -78,6 +90,8 @@ export const getServicesController = async (
 ) => {
 	const { name, type } = req.query as GetServiceQuery
 
+	const list = await getServiceList(name)
+
 	// let serviceList = Array.from(services.values())
 	//
 	// if (type || name) {
@@ -89,5 +103,5 @@ export const getServicesController = async (
 	// 	})
 	// }
 
-	return reply.send([])
+	return reply.send(list)
 }

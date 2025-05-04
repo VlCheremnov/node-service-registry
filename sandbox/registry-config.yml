@@ -1,0 +1,29 @@
+services:
+  server:
+    env_file:
+      - ./.env
+    build:
+      context: .
+      dockerfile: Dockerfile
+    working_dir: /packages/service-registry
+    volumes:
+      - ../src:/packages/service-registry/src
+      - ../package.json:/packages/service-registry/package.json
+      - ../nodemon.json:/packages/service-registry/nodemon.json
+      - ../tsconfig.json:/packages/service-registry/tsconfig.json
+      - ./.env:/packages/service-registry/.env
+      - ../node_modules:/packages/service-registry/node_modules
+
+  server-2:
+    env_file:
+      - ./.env
+    build:
+      context: .
+      dockerfile: Dockerfile
+    working_dir: /packages/service-registry
+    volumes:
+      - ../src:/packages/service-registry/src
+      - ../package.json:/packages/service-registry/package.json
+      - ../tsconfig.json:/packages/service-registry/tsconfig.json
+      - ./.env:/packages/service-registry/.env
+      - ../node_modules:/packages/service-registry/node_modules
