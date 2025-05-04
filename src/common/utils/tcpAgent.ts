@@ -2,9 +2,8 @@ import { createServer, Socket } from 'net'
 import { PEERS, TCP_HOST, TCP_PORT } from '../constants'
 import * as crypto from 'node:crypto'
 import split2 from 'split2'
-import { once } from 'node:events'
+import { once, EventEmitter } from 'node:events'
 import { TcpTypesEnum } from '../enums'
-const EventEmitter = require('node:events')
 
 type PeerInfo = { id: string; host: string; port: number }
 
@@ -117,7 +116,6 @@ export class TcpAgent extends EventEmitter {
 	private onData(from: string, line: string) {
 		try {
 			const obj = JSON.parse(line)
-			// TODO: бизнес-обработка
 			console.log(`[${this.current.id}] ← ${from}`, obj)
 
 			this.emit(obj.type || TcpTypesEnum.Default, 23)
@@ -131,11 +129,29 @@ export class TcpAgent extends EventEmitter {
 	}
 
 	broadcast(obj: unknown) {
-		const msg = JSON.stringify(obj) + '\n'
+		const msg = this.getTcpMessage(obj)
 		for (const sock of this.sockets.values()) this.safeWrite(sock, msg)
 	}
 
+	sendToPeer(peerId: string, obj: unknown) {
+		const sock = this.sockets.get(peerId)
+
+		if (!sock) {
+			throw new Error('Socket is not defined')
+		}
+
+		return this.safeWrite(sock, this.getTcpMessage(obj))
+	}
+
+	getTcpMessage(obj: unknown): string {
+		return JSON.stringify(obj) + '\n'
+	}
+
 	private async safeWrite(sock: Socket, msg: string) {
+		/**
+		 * Если send-буфер забит, то ждем "drain".
+		 * "drain" гарантирует, что ОС освободила место для следующих пакетов. Тот пакет, ради которого вернулся false, уже в буфере ядра и отправится сам.
+		 * */
 		if (!sock.write(msg)) await once(sock, 'drain')
 	}
 }
