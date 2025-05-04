@@ -1,137 +1,141 @@
 import { createServer, Socket } from 'net'
 import { PEERS, TCP_HOST, TCP_PORT } from '../constants'
 import * as crypto from 'node:crypto'
+import split2 from 'split2'
+import { once } from 'node:events'
+import { TcpTypesEnum } from '../enums'
+const EventEmitter = require('node:events')
 
-type PeerInfo = { id: string; host: string }
+type PeerInfo = { id: string; host: string; port: number }
 
-export class TcpAgent {
+export class TcpAgent extends EventEmitter {
 	/* Список TCP агентов */
 	private peers: PeerInfo[]
 	/* Список TCP соединений */
 	private sockets = new Map<string, Socket>()
 	/* Текущий TCP агент */
-	private readonly currentPeer: PeerInfo
-	/* Порт на котором запускается TCP */
-	private readonly tcpPort = TCP_PORT
+	private readonly current: PeerInfo
 
 	constructor(tcpHost: string = TCP_HOST, peers: string[] = PEERS) {
-		const parsedPeers = this.parsePeers([...peers, tcpHost])
+		super()
 
-		this.currentPeer = parsedPeers.find(({ host }) => host === tcpHost)!
+		const parsedPeers = this.parsePeers([...peers, `${tcpHost}:${TCP_PORT}`])
 
-		this.peers = parsedPeers.filter((p) => p.id !== this.currentPeerId) // без себя
-	}
-
-	get currentPeerId() {
-		return this.currentPeer.id
+		this.current = parsedPeers.find(({ host }) => host === tcpHost)!
+		this.peers = parsedPeers.filter((p) => p.id !== this.current.id) // без себя
 	}
 
 	/** Формируем уникальный id для TCP агентов */
 	private parsePeers(peers: string[]): PeerInfo[] {
-		return peers
-			.map((s) => s.split(':')[0])
-			.map((s) => s.trim())
-			.filter(Boolean)
-			.map((host) => ({
-				host,
-				id: this.createCryptoId(host),
-			}))
-			.sort((a, b) => Number(a.id) - Number(b.id))
+		const parsedPeers: PeerInfo[] = []
+
+		for (const peer of Array.from(new Set(peers))) {
+			const [host, portStr] = peer.trim().toLowerCase().split(':')
+			const port = Number(portStr) || TCP_PORT
+
+			if (!host) continue
+
+			parsedPeers.push({ id: this.createPeerId(peer), host, port })
+		}
+		return parsedPeers.sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))
 	}
 
 	/** Формируем уникальный ключ по имени хоста */
-	createCryptoId(name: string) {
-		return crypto
-			.createHash('sha1')
-			.update(name)
-			.digest()
-			.readUInt32BE(0)
-			.toString()
+	private createPeerId(name: string) {
+		return crypto.createHash('sha1').update(name).digest('hex').toString()
 	}
 
 	/** Запуск TCP-listener + исходящих коннектов */
 	start() {
-		this.createListener()
+		this.listen()
 		this.dialOut() // исходящие
+		setInterval(() => this.pingAll(), 10_000)
 	}
 
 	/** Создаем TCP сокет */
-	private createListener() {
-		createServer((sock) => {
-			/* sock - входящее TCP-соединение «удалённый узел ←→ текущий узел» */
-
-			sock.setEncoding('utf8')
-			sock.once('data', (id: string) => {
-				// Первое сообщение от клиента должен быть его peerId
-				const remoteId = id.trim()
-
-				// Проверяем, что нам точно пришел id
-				if (!isNaN(Number(remoteId))) {
-					this.sockets.set(remoteId, sock)
-
-					sock.on('data', (chunk) => {
-						this.onData(remoteId, chunk)
-					})
-				} else {
-					/* todo: Вместо исключения можно делать реконект */
-					// Если первым не пришел id - выдаем исключение
-					throw Error('Received an unexpected answer')
-				}
-			})
-		}).listen(this.tcpPort, () =>
-			console.log(`[${this.currentPeerId}] TCP listening ${this.tcpPort}`)
-		)
+	private listen() {
+		const srv = createServer((sock) => this.acceptInbound(sock))
+		srv.listen(this.current.port, () => {
+			console.log(`[${this.current.id}] TCP listen ${this.current.port}`)
+		})
 	}
 
-	/** Отправить JSON-объект всем peer’ам */
-	/* todo: доработать на промисы */
-	broadcast(obj: unknown) {
-		const msg = JSON.stringify(obj) + '\n'
-
-		for (const sock of this.sockets.values())
-			sock.write(msg, (err?: Error) => {
-				console.log('err', err)
-			})
+	private acceptInbound(sock: Socket) {
+		sock.setEncoding('utf8')
+		sock.once('data', (id: string) => {
+			const peerId = id.trim()
+			if (!/^[0-9a-f]{40}$/i.test(peerId)) {
+				sock.destroy(new Error('Bad peerId'))
+				return
+			}
+			this.registerSocket(peerId, sock)
+			this.attachDataHandler(peerId, sock)
+		})
 	}
 
-	/** Подключаем исходящие пиры */
 	private dialOut() {
 		for (const peer of this.peers) {
-			if (peer.id > this.currentPeerId) continue // правило, чтобы не было двойных каналов
-			this.connectToPeer(peer)
+			if (peer.id > this.current.id) continue // чтобы не было дубликатов
+			this.connectPeer(peer)
 		}
-
-		// setInterval(() => this.pingAll(), 1_000) // heartbeat
 	}
 
-	private connectToPeer(peer: PeerInfo) {
-		const sock = new Socket()
-		const connect = () => {
-			sock.connect(this.tcpPort, peer.host, () => {
-				console.log(`[${this.currentPeerId}] ↔ connected ${peer.id}`)
+	private connectPeer(peer: PeerInfo) {
+		const dial = () => {
+			const sock = new Socket()
 
-				sock.write(this.currentPeerId + '\n')
+			sock.connect(peer.port, peer.host, () => {
+				console.log(`[${this.current.id}] → dial ${peer.id}`)
+				sock.write(this.current.id + '\n')
+				this.registerSocket(peer.id, sock)
+			})
 
-				this.sockets.set(peer.id, sock)
+			sock.setEncoding('utf8')
+			this.attachDataHandler(peer.id, sock)
+			sock.on('error', (err) => console.error(err))
+			sock.on('close', () => {
+				console.log('close')
+				this.sockets.delete(peer.id)
+				setTimeout(dial, 2_000)
 			})
 		}
 
-		sock.setEncoding('utf8')
-
-		sock.on('data', (chunk: string) => {
-			this.onData(peer.id, chunk)
-		})
-		sock.on('error', (err) => console.error(err))
-		sock.on('close', () => setTimeout(connect, 2000))
-
-		connect()
+		dial()
 	}
 
-	private onData(from: string, chunk: string) {
+	private registerSocket(id: string, sock: Socket) {
+		const prev = this.sockets.get(id)
+		if (prev && prev !== sock) prev.destroy() // убиваем дубликат
+		this.sockets.set(id, sock)
+		sock.on('close', () => this.sockets.delete(id))
+	}
+
+	private attachDataHandler(id: string, sock: Socket) {
+		sock.pipe(split2()).on('data', (line) => this.onData(id, line))
+	}
+
+	private onData(from: string, line: string) {
 		try {
-			/* Обработка */
+			const obj = JSON.parse(line)
+			// TODO: бизнес-обработка
+			console.log(`[${this.current.id}] ← ${from}`, obj)
+
+			this.emit(obj.type || TcpTypesEnum.Default, 23)
 		} catch {
-			/* ignore partial frames */
+			/* bad frame — игнорируем или логируем */
 		}
+	}
+
+	private pingAll() {
+		this.broadcast({ type: TcpTypesEnum.Ping, ts: Date.now() })
+	}
+
+	broadcast(obj: unknown) {
+		const msg = JSON.stringify(obj) + '\n'
+		for (const sock of this.sockets.values()) this.safeWrite(sock, msg)
+	}
+
+	private async safeWrite(sock: Socket, msg: string) {
+		if (!sock.write(msg)) await once(sock, 'drain')
 	}
 }

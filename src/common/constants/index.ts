@@ -14,6 +14,6 @@ export const REDIS_KEY = (name: string) => `sr:${name}`
 export const TTL_SEC = Math.ceil(HEALTH_MS / 1000) * 3
 
 export const LEVEL_DB_PATH = process.env.LEVEL_DB_PATH || './level-db/data'
-export const TCP_PORT = 7070
+export const TCP_PORT = Number(process.env.TCP_PORT) || 7070
 export const PEERS = (process.env.PEERS || '').split(',')
 export const TCP_HOST = process.env.TCP_HOST || os.hostname()
