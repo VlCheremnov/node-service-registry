@@ -19,3 +19,9 @@ export interface EventEmitTcpDataType<T = Record<any, any>>
 	extends CommandType<T> {
 	fromId: string
 }
+
+export interface PeerInfo {
+	id: string
+	host: string
+	port: number
+}

@@ -1,5 +1,9 @@
 /* todo: После выбора лидера все сервисы начинают беспорядочно выбирать нового лидера */
 
+function sleep(ms) {
+	return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
 import { RaftStateEnum, TcpTypesEnum, VoteStatusEnum } from '../enums'
 import {
 	EventEmitTcpDataType,
@@ -13,8 +17,8 @@ import { PEERS, TCP_HOST } from '../constants'
 
 export class RaftAgent {
 	tcpAgent: TcpAgent
-	minElectionTime = 10000
-	maxElectionTime = 10300
+	minElectionTime = 1_000
+	maxElectionTime = 1_300
 
 	state = RaftStateEnum.Follower // Текущее состояние узла: 'follower', 'candidate' или 'leader'
 	currentTerm = 0 // Номер последнего известного срока (терма). Увеличивается при каждых выборах и при получении сообщения с большим term.
@@ -41,8 +45,19 @@ export class RaftAgent {
 
 		this.peerLengths = PEERS.length
 
+		this.start()
+	}
+
+	private async start() {
+		await sleep(3_000)
 		this.setEvents()
 		this.resetElectionTimeout()
+
+		setTimeout(() => {
+			console.log('Установлены новые значения')
+			this.minElectionTime = 40_000
+			this.maxElectionTime = 40_300
+		}, 0)
 	}
 
 	get quorum() {
@@ -67,9 +82,12 @@ export class RaftAgent {
 		)
 	}
 
-	private resetElectionTimeout() {
-		console.log('Таймер запущен')
+	private stopElectionTimeout() {
 		if (this.electionTimeoutId) clearTimeout(this.electionTimeoutId)
+	}
+
+	private resetElectionTimeout() {
+		this.stopElectionTimeout()
 
 		this.electionTimeoutId = setTimeout(() => {
 			console.log('Таймер просрочен')
@@ -77,11 +95,16 @@ export class RaftAgent {
 			this.startElection()
 			/** todo: если мы уже кандидат, а выборы не завершились, нужно запустить повторный раунд (split-vote) */
 		}, this.randomElectionTimeout())
+
+		console.log(
+			'Таймер запущен на время: ',
+			this.randomElectionTimeout() / 1000 + 'с.'
+		)
 	}
 
 	/* todo: Добавить ничью и перезапустить выборы */
 	private startElection() {
-		console.log('Данный кластер начал согласование')
+		console.log('Данный кластер начал голосование')
 		this.resetState({
 			state: RaftStateEnum.Candidate,
 			term: this.currentTerm + 1,
@@ -116,6 +139,8 @@ export class RaftAgent {
 	}
 
 	private requestVote(req: EventEmitTcpDataType<StartElectionDataType>) {
+		this.stopElectionTimeout()
+
 		if (this.votedFor || !req.data) return
 
 		const data: RequestVoteDataType = { status: VoteStatusEnum.Success }
@@ -135,7 +160,7 @@ export class RaftAgent {
 	}
 
 	private voteForLeader(req: EventEmitTcpDataType<RequestVoteDataType>) {
-		if (!req.data) return
+		if (!req.data || this.state !== RaftStateEnum.Candidate) return
 
 		if (req.data.status === VoteStatusEnum.Success) {
 			this.votedForMe++
@@ -144,6 +169,7 @@ export class RaftAgent {
 		console.log('Принимает голос: ', this.votedForMe, '/', this.quorum)
 
 		if (this.votedForMe >= this.quorum) {
+			console.log('Обновляем лидера у всех')
 			this.resetState({ state: RaftStateEnum.Leader })
 
 			this.tcpAgent.broadcast({
@@ -160,7 +186,7 @@ export class RaftAgent {
 		console.log('Лидер обновлен: ', req.fromId)
 		this.currentLeaderId = req.fromId
 		this.resetState({ term: req.data?.term })
-		this.resetElectionTimeout()
+		// this.resetElectionTimeout()
 	}
 
 	heartbeat() {}
