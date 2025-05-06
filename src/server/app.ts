@@ -1,8 +1,7 @@
 import Fastify from 'fastify'
 import { PORT } from '../common/constants'
 import routes from './routes'
-import * as os from 'node:os'
-import { TcpAgent } from '../common/utils/tcpAgent'
+import { RaftAgent } from '../common/utils/raftAgent'
 
 export default async () => {
 	const app = Fastify({ logger: true })
@@ -17,5 +16,5 @@ export default async () => {
 			process.exit(1)
 		})
 
-	new TcpAgent().start()
+	new RaftAgent()
 }

@@ -4,6 +4,7 @@ import * as crypto from 'node:crypto'
 import split2 from 'split2'
 import { once, EventEmitter } from 'node:events'
 import { TcpTypesEnum } from '../enums'
+import { CommandType, EventEmitTcpDataType } from '../types'
 
 type PeerInfo = { id: string; host: string; port: number }
 
@@ -13,9 +14,9 @@ export class TcpAgent extends EventEmitter {
 	/* Список TCP соединений */
 	private sockets = new Map<string, Socket>()
 	/* Текущий TCP агент */
-	private readonly current: PeerInfo
+	public readonly current: PeerInfo
 
-	constructor(tcpHost: string = TCP_HOST, peers: string[] = PEERS) {
+	constructor(tcpHost: string, peers: string[]) {
 		super()
 
 		const parsedPeers = this.parsePeers([...peers, `${tcpHost}:${TCP_PORT}`])
@@ -45,7 +46,7 @@ export class TcpAgent extends EventEmitter {
 	}
 
 	/** Запуск TCP-listener + исходящих коннектов */
-	start() {
+	public start() {
 		this.listen()
 		this.dialOut() // исходящие
 		setInterval(() => this.pingAll(), 10_000)
@@ -113,27 +114,29 @@ export class TcpAgent extends EventEmitter {
 		sock.pipe(split2()).on('data', (line) => this.onData(id, line))
 	}
 
-	private onData(from: string, line: string) {
+	private onData(fromId: string, line: string) {
 		try {
-			const obj = JSON.parse(line)
-			console.log(`[${this.current.id}] ← ${from}`, obj)
+			const obj: CommandType = JSON.parse(line)
 
-			this.emit(obj.type || TcpTypesEnum.Default, 23)
-		} catch {
+			const eventData: EventEmitTcpDataType = { ...obj, fromId }
+
+			this.emit(obj.type || TcpTypesEnum.Default, eventData)
+		} catch (err) {
 			/* bad frame — игнорируем или логируем */
+			console.error('tcp onData err', err)
 		}
 	}
 
 	private pingAll() {
-		this.broadcast({ type: TcpTypesEnum.Ping, ts: Date.now() })
+		return this.broadcast({ type: TcpTypesEnum.Ping, ts: Date.now() })
 	}
 
-	broadcast(obj: unknown) {
+	public async broadcast(obj: CommandType) {
 		const msg = this.getTcpMessage(obj)
-		for (const sock of this.sockets.values()) this.safeWrite(sock, msg)
+		for (const sock of this.sockets.values()) await this.safeWrite(sock, msg)
 	}
 
-	sendToPeer(peerId: string, obj: unknown) {
+	public sendToPeer(peerId: string, obj: CommandType) {
 		const sock = this.sockets.get(peerId)
 
 		if (!sock) {
@@ -143,7 +146,7 @@ export class TcpAgent extends EventEmitter {
 		return this.safeWrite(sock, this.getTcpMessage(obj))
 	}
 
-	getTcpMessage(obj: unknown): string {
+	private getTcpMessage(obj: unknown): string {
 		return JSON.stringify(obj) + '\n'
 	}
 
