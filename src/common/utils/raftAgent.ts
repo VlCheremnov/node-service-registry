@@ -161,7 +161,7 @@ export class RaftAgent {
 		const { term, lastLogTerm, lastLogIndex } = req.data
 
 		if (
-			term > this.currentTerm &&
+			term >= this.currentTerm &&
 			lastLogTerm >= this.lastLogTerm &&
 			lastLogIndex >= this.lastLogIndex
 		) {
