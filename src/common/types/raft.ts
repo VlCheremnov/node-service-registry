@@ -9,12 +9,8 @@ export interface LogEntry {
 
 export interface StartElectionDataType {
 	term: number
-	commitIndex: number
-}
-
-export interface StartElectionDataType {
-	term: number
-	commitIndex: number
+	lastLogIndex: number
+	lastLogTerm: number
 }
 
 export interface RequestVoteDataType {
