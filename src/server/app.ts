@@ -1,7 +1,8 @@
 import Fastify from 'fastify'
-import { PORT } from '../common/constants'
+import { PEERS, PORT, TCP_HOST } from '../common/constants'
 import routes from './routes'
-import { RaftAgent } from '../common/utils/raftAgent'
+import { RaftAgent } from '../common/utils/raft/raftAgent'
+import { TcpAgent } from '../common/utils/tcpAgent'
 
 export default async () => {
 	const app = Fastify({ logger: true })
@@ -16,5 +17,5 @@ export default async () => {
 			process.exit(1)
 		})
 
-	new RaftAgent()
+	new RaftAgent(new TcpAgent(TCP_HOST, PEERS))
 }

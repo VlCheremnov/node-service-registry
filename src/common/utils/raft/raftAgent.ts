@@ -2,23 +2,27 @@
  *   устарел, он немедленно возвращается в предыдущее состояние.
  *   Если сервер получает запрос с устаревшим номером срока, он отклоняет его. */
 
+/* todo: Оставить два ивента RequestVote, AppendEntries (Heartbeat)*/
+
+import { AutowireRaftEvents, RaftEvent } from './decorators'
+
 function sleep(ms) {
 	return new Promise((resolve) => setTimeout(resolve, ms))
 }
 
-import { RaftStateEnum, TcpTypesEnum, VoteStatusEnum } from '../enums'
+import { RaftStateEnum, TcpTypesEnum, VoteStatusEnum } from '../../enums'
 import {
 	EventEmitTcpDataType,
 	LogEntry,
 	RequestVoteDataType,
 	StartElectionDataType,
 	UpdateLeaderDataType,
-} from '../types'
-import { TcpAgent } from './tcpAgent'
-import { PEERS, TCP_HOST } from '../constants'
+} from '../../types'
+import { TcpAgent } from './../tcpAgent'
+import { PEERS } from '../../constants'
 
+@AutowireRaftEvents
 export class RaftAgent {
-	tcpAgent: TcpAgent
 	minElectionTime = 1_000
 	maxElectionTime = 1_300
 	appendElectionTime = 300
@@ -46,8 +50,7 @@ export class RaftAgent {
 	/** На момент выборов (после окончания переменные должны обнуляться) */
 	votedFor: string | null = null // ID кандидата, которому узел отдал голос в currentTerm (или null). Защищает правило «один узел — один голос в срок»
 
-	constructor() {
-		this.tcpAgent = new TcpAgent(TCP_HOST, PEERS)
+	constructor(public tcpAgent: TcpAgent) {
 		this.tcpAgent.start()
 
 		this.peerLengths = PEERS.length
@@ -57,7 +60,6 @@ export class RaftAgent {
 
 	private async start() {
 		await sleep(3_000)
-		this.setEvents()
 		this.resetElectionTimeout()
 
 		setTimeout(() => {
@@ -133,25 +135,19 @@ export class RaftAgent {
 		})
 	}
 
-	private setEvents() {
-		console.log('Ивенты запущены')
-		this.tcpAgent.on(TcpTypesEnum.Ping, this.pingTcp.bind(this))
-		this.tcpAgent.on(TcpTypesEnum.Heartbeat, this.heartbeat.bind(this))
-		this.tcpAgent.on(TcpTypesEnum.RequestVote, this.requestVote.bind(this))
-		this.tcpAgent.on(TcpTypesEnum.VoteForLeader, this.voteForLeader.bind(this))
-		this.tcpAgent.on(TcpTypesEnum.UpdateLeader, this.updateLeader.bind(this))
+	@RaftEvent(TcpTypesEnum.Ping)
+	protected pingTcp(req: EventEmitTcpDataType) {
+		// console.log('data', data)
 	}
 
-	heartbeat() {
+	@RaftEvent(TcpTypesEnum.AppendEntries)
+	protected appendEntries() {
 		console.log('Запрос принят')
 		this.resetElectionTimeout()
 	}
 
-	private pingTcp(req: EventEmitTcpDataType) {
-		// console.log('data', data)
-	}
-
-	private requestVote(req: EventEmitTcpDataType<StartElectionDataType>) {
+	@RaftEvent(TcpTypesEnum.RequestVote)
+	protected RequestVote(req: EventEmitTcpDataType<StartElectionDataType>) {
 		// this.stopElectionTimeout()
 
 		if (this.votedFor || !req.data) return
@@ -178,7 +174,8 @@ export class RaftAgent {
 		})
 	}
 
-	private voteForLeader(req: EventEmitTcpDataType<RequestVoteDataType>) {
+	@RaftEvent(TcpTypesEnum.VoteForLeader)
+	protected voteForLeader(req: EventEmitTcpDataType<RequestVoteDataType>) {
 		/* Защита если лидер выбран, но данный кластер начал голосование */
 		if (!req.data || this.state !== RaftStateEnum.Candidate) return
 
@@ -205,30 +202,31 @@ export class RaftAgent {
 		}
 	}
 
+	@RaftEvent(TcpTypesEnum.UpdateLeader)
+	protected updateLeader(req: EventEmitTcpDataType<UpdateLeaderDataType>) {
+		console.log('Лидер обновлен: ', req.fromId)
+		this.currentLeaderId = req.fromId
+		this.resetState({ term: req.data?.term })
+		this.resetElectionTimeout()
+	}
+
 	startHeartbeat() {
-		this.sendHeartbeat()
+		this.heartbeat()
 		this.electionTimeoutId = setInterval(
-			this.sendHeartbeat.bind(this),
+			this.heartbeat.bind(this),
 			this.appendElectionTime
 		)
 	}
 
-	sendHeartbeat() {
+	heartbeat() {
 		/* todo: Обновляем таймаут и одновременно обновляем журнал (если есть новые записи) у фоловеров */
 		console.log('Запрос отправлен')
 		this.tcpAgent.broadcast({
-			type: TcpTypesEnum.Heartbeat,
+			type: TcpTypesEnum.AppendEntries,
 			ts: Date.now(),
 			data: {
 				term: this.currentTerm,
 			} as UpdateLeaderDataType,
 		})
-	}
-
-	updateLeader(req: EventEmitTcpDataType<UpdateLeaderDataType>) {
-		console.log('Лидер обновлен: ', req.fromId)
-		this.currentLeaderId = req.fromId
-		this.resetState({ term: req.data?.term })
-		this.resetElectionTimeout()
 	}
 }
