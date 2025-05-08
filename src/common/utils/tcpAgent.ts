@@ -7,6 +7,7 @@ import { TcpTypesEnum } from '../enums'
 import { CommandType, EventEmitTcpDataType, PeerInfo } from '../types'
 
 export class TcpAgent extends EventEmitter {
+	private drainPromise: Promise<void> | null = null
 	/* Список TCP соединений */
 	private sockets = new Map<string, Socket>()
 	/* Список TCP агентов */
@@ -161,6 +162,15 @@ export class TcpAgent extends EventEmitter {
 		 * Если send-буфер забит, то ждем "drain".
 		 * "drain" гарантирует, что ОС освободила место для следующих пакетов. Тот пакет, ради которого вернулся false, уже в буфере ядра и отправится сам.
 		 * */
+		this.setDrainPromise(sock)
 		if (!sock.write(msg)) await once(sock, 'drain')
+	}
+
+	private setDrainPromise(sock: Socket) {
+		if (!this.drainPromise) {
+			this.drainPromise = once(sock, 'drain').then(() => {
+				this.drainPromise = null
+			})
+		}
 	}
 }
