@@ -7,16 +7,16 @@ export interface PeerInfo {
 	port: number
 }
 
-export interface CommandType<T = Record<any, any>> {
+export interface TcpCommandType<Payload = Record<any, any>> {
 	isResponse?: boolean
 	id?: string
 	type: TcpTypesEnum
 	ts?: number
-	data?: T
+	data?: Payload
 }
 
 export interface EventEmitTcpDataType<T = Record<any, any>>
-	extends CommandType<T> {
+	extends TcpCommandType<T> {
 	fromId: string
 }
 
@@ -26,7 +26,6 @@ export interface TcpOptions {
 	responseTimeout?: number
 	peers: string[]
 }
-
 export interface TcpModuleAsyncOptions extends Pick<ModuleMetadata, 'imports'> {
 	inject?: any[]
 	useFactory: (...args: any[]) => TcpOptions
