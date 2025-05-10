@@ -18,8 +18,12 @@ import { TcpTypesEnum } from '@lib/tcp-transport/enums'
 import * as crypto from 'node:crypto'
 import { once } from 'node:events'
 import { TCP_PORT } from '@lib/tcp-transport/constants'
-import { encode, decode } from '@msgpack/msgpack'
-import { Injectable } from '@nestjs/common'
+import { Inject, Injectable } from '@nestjs/common'
+import {
+	encodeFrame,
+	FrameDecoderService,
+} from '@lib/tcp-transport/components/framing.servcie'
+import { PeerManagementProvider } from '@lib/tcp-transport/components/peer-management.provider'
 
 @Injectable()
 export class TcpTransport extends Server implements CustomTransportStrategy {
@@ -33,21 +37,21 @@ export class TcpTransport extends Server implements CustomTransportStrategy {
 	/* Текущий TCP агент */
 	public readonly self: PeerInfo
 
-	constructor({
-		host,
-		port = TCP_PORT,
-		peers,
-		responseTimeout = 1_000,
-	}: TcpOptions) {
+	constructor(
+		@Inject('TCP_OPTIONS') private readonly opts: TcpOptions,
+		public peerManagement: PeerManagementProvider
+	) {
 		super()
 
-		const parsedPeers = this.parsePeers([...peers, `${host}:${port}`])
+		const { self, filteredPeers } = this.peerManagement.buildPeerList(
+			opts.host,
+			opts.port ?? TCP_PORT,
+			opts.peers
+		)
 
-		this.self = parsedPeers.find(
-			(peer) => peer.host === host && peer.port == port
-		)!
-		this.peers = parsedPeers.filter((p) => p.id !== this.self.id) // без себя
-		this.responseTimeout = responseTimeout
+		this.self = self
+		this.peers = filteredPeers
+		this.responseTimeout = opts.responseTimeout ?? 1_000
 	}
 
 	/**
@@ -99,30 +103,10 @@ export class TcpTransport extends Server implements CustomTransportStrategy {
 		throw new Error('Method not implemented.')
 	}
 
-	/** Формируем уникальный id для TCP агентов */
-	private parsePeers(peers: string[]): PeerInfo[] {
-		const parsedPeers: PeerInfo[] = []
-
-		for (const peer of Array.from(new Set(peers))) {
-			const [host, portStr] = peer.trim().toLowerCase().split(':')
-			const port = Number(portStr) || TCP_PORT
-
-			if (!host) continue
-
-			parsedPeers.push({ id: this.createPeerId(`${host}:${port}`), host, port })
-		}
-		return parsedPeers.sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))
-	}
-
-	/** Формируем уникальный ключ по имени хоста */
-	private createPeerId(name: string) {
-		return crypto.createHash('sha1').update(name).digest('hex').toString()
-	}
-
 	/** Запускаем сервер */
 	private startListener() {
 		this.server = createServer((sock) => {
-			const decoder = new FrameDecoder()
+			const decoder = new FrameDecoderService()
 
 			/* Создаем первое подключение между сокетами на регистрацию сокета в текущем кластере */
 			sock.once('data', (chunk: Buffer) => {
@@ -192,7 +176,7 @@ export class TcpTransport extends Server implements CustomTransportStrategy {
 	private attachDataHandler(
 		fromId: string,
 		sock: Socket,
-		decoder = new FrameDecoder()
+		decoder = new FrameDecoderService()
 	) {
 		sock.on('data', async (chunk: Buffer) => {
 			for (let chunkCommand of decoder.push(chunk)) {
@@ -337,49 +321,5 @@ export class TcpTransport extends Server implements CustomTransportStrategy {
 			this.drainSocketPromises.set(sock, promise)
 		}
 		return promise
-	}
-}
-
-/** Версия протокола, в случае изменения сетевого протокола или формата сообщений поднять версию */
-/** Можно добавить совместимость со старыми версиями */
-export const PROTOCOL_VERSION = 1
-
-export function encodeFrame(obj: unknown): Buffer {
-	const body = Buffer.from(encode(obj)) // ⬅️  оборачиваем
-	const frame = Buffer.allocUnsafe(4 + 1 + body.length)
-
-	frame.writeUInt32BE(1 + body.length, 0) // length
-	frame.writeUInt8(PROTOCOL_VERSION, 4) // version
-	body.copy(frame, 5) // теперь copy работает
-
-	return frame
-}
-
-export class FrameDecoder {
-	private buffer = Buffer.alloc(0)
-	private maxBuffer = 4 * 1024 * 1024 // 4 МБ
-
-	/** feed raw chunk, get array of decoded payloads */
-	push(chunk: Buffer): unknown[] {
-		this.buffer = Buffer.concat([this.buffer, chunk])
-
-		if (this.buffer.length > this.maxBuffer) {
-			throw new Error('Inbound buffer overflow')
-		}
-
-		const messages: unknown[] = []
-
-		while (this.buffer.length >= 4) {
-			const len = this.buffer.readUInt32BE(0)
-			if (this.buffer.length < 4 + len) break
-			const version = this.buffer.readUInt8(4)
-			if (version !== PROTOCOL_VERSION) throw new Error('Bad protocol version')
-
-			const payload = this.buffer.subarray(5, 4 + len)
-			messages.push(decode(payload))
-
-			this.buffer = this.buffer.subarray(4 + len)
-		}
-		return messages
 	}
 }

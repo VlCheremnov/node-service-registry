@@ -1,38 +1,38 @@
 import { DynamicModule, Global, Module } from '@nestjs/common'
+import { PeerManagementProvider } from './components/peer-management.provider'
 import { TcpTransport } from './tcp.transport'
 import { TcpModuleAsyncOptions, TcpOptions } from '@lib/tcp-transport/types'
 
 @Global()
 @Module({})
 export class TcpModule {
+	/** Static opts */
 	static forRoot(opts: TcpOptions): DynamicModule {
 		return {
 			module: TcpModule,
 			providers: [
-				{
-					provide: TcpTransport,
-					useValue: new TcpTransport(opts),
-				},
+				PeerManagementProvider,
+				{ provide: 'TCP_OPTIONS', useValue: opts }, // ← кладём опции в контейнер
+				TcpTransport, // ← Nest создаст инстанс сам
 			],
 			exports: [TcpTransport],
 		}
 	}
-	static forRootAsync(options: TcpModuleAsyncOptions): DynamicModule {
-		const provider = {
-			provide: TcpTransport,
-			// фабрика, которая вызовет ваш useFactory, а затем создаст инстанс транспорта
-			useFactory: async (...args: any[]) => {
-				const opts = await options.useFactory(...args)
-				console.log('useFactory', opts)
-				return new TcpTransport(opts)
-			},
-			inject: options.inject || [],
-		}
 
+	/** Async opts */
+	static forRootAsync(options: TcpModuleAsyncOptions): DynamicModule {
 		return {
 			module: TcpModule,
 			imports: options.imports || [],
-			providers: [provider],
+			providers: [
+				PeerManagementProvider,
+				{
+					provide: 'TCP_OPTIONS',
+					useFactory: options.useFactory, // ← получаем opts из async-функции
+					inject: options.inject || [],
+				},
+				TcpTransport,
+			],
 			exports: [TcpTransport],
 		}
 	}
