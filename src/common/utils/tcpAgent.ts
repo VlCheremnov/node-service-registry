@@ -54,7 +54,9 @@ export class TcpAgent extends EventEmitter {
 	private listen() {
 		const srv = createServer((sock) => {
 			sock.setEncoding('utf8')
-			sock.once('data', (id: string) => {
+
+			/* Создаем первое подключение между сокетами на регистрацию сокета в текущем кластере */
+			sock.pipe(split2()).once('data', (id: string) => {
 				const peerId = id.trim()
 				console.log('once', peerId)
 				if (!/^[0-9a-f]{40}$/i.test(peerId)) {
@@ -86,7 +88,6 @@ export class TcpAgent extends EventEmitter {
 
 			sock.connect(peer.port, peer.host, () => {
 				console.log(`[${this.self.id}] → dial ${peer.id}`)
-				// sock.write(this.self.id + '\n')
 				this.safeWrite(sock, this.self.id)
 				this.registerSocket(peer.id, sock)
 			})

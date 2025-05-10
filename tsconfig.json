@@ -17,6 +17,19 @@
     "noImplicitAny": false,
     "strictBindCallApply": false,
     "noFallthroughCasesInSwitch": false,
-    "paths": {}
+    "paths": {
+      "@lib/shared": [
+        "libs/shared/src"
+      ],
+      "@lib/shared/*": [
+        "libs/shared/src/*"
+      ],
+      "@lib/tcp-transport": [
+        "libs/tcp-transport/src"
+      ],
+      "@lib/tcp-transport/*": [
+        "libs/tcp-transport/src/*"
+      ]
+    }
   }
 }

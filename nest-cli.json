@@ -27,6 +27,24 @@
       "compilerOptions": {
         "tsConfigPath": "apps/server/tsconfig.app.json"
       }
+    },
+    "shared": {
+      "type": "library",
+      "root": "libs/shared",
+      "entryFile": "index",
+      "sourceRoot": "libs/shared/src",
+      "compilerOptions": {
+        "tsConfigPath": "libs/shared/tsconfig.lib.json"
+      }
+    },
+    "tcp-transport": {
+      "type": "library",
+      "root": "libs/tcp-transport",
+      "entryFile": "index",
+      "sourceRoot": "libs/tcp-transport/src",
+      "compilerOptions": {
+        "tsConfigPath": "libs/tcp-transport/tsconfig.lib.json"
+      }
     }
   }
 }
