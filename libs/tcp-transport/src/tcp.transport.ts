@@ -22,6 +22,8 @@ import { DataHandlerService } from '@lib/tcp-transport/components/data-handler.s
 export class TcpTransport extends Server implements CustomTransportStrategy {
 	private server: NetServer
 	private drainSocketPromises = new Map<Socket, Promise<void>>()
+	/* Список декодеров на каждый сокет */
+	private decoders = new Map<Socket, FrameDecoderService>()
 	/* Список TCP соединений */
 	private sockets = new Map<string, Socket>()
 
@@ -97,10 +99,20 @@ export class TcpTransport extends Server implements CustomTransportStrategy {
 		throw new Error('Method not implemented.')
 	}
 
+	public getDecoder(sock: Socket): FrameDecoderService {
+		return this.decoders.get(sock) ?? this.createAndRegisterDecoder(sock)
+	}
+
+	private createAndRegisterDecoder(sock: Socket): FrameDecoderService {
+		const decoder = new FrameDecoderService()
+		this.decoders.set(sock, decoder)
+		return decoder
+	}
+
 	/** Запускаем сервер */
 	private startListener() {
 		this.server = createServer((sock) => {
-			const decoder = new FrameDecoderService()
+			const decoder = this.getDecoder(sock)
 
 			/* Создаем первое подключение между сокетами на регистрацию сокета в текущем кластере */
 			sock.once('data', (chunk: Buffer) => {
@@ -111,7 +123,7 @@ export class TcpTransport extends Server implements CustomTransportStrategy {
 					return
 				}
 				this.registerSocket(peerId, sock)
-				this.attachDataHandler(peerId, sock, decoder)
+				this.attachDataHandler(peerId, sock)
 			})
 		})
 		this.server.listen(this.self.port, () => {
@@ -135,15 +147,12 @@ export class TcpTransport extends Server implements CustomTransportStrategy {
 			sock.connect(peer.port, peer.host, () => {
 				console.log(`[${this.self.id}] → dial ${peer.id}`)
 				this.dataHandler.safeWrite(sock, this.self.id)
-				this.registerSocket(peer.id, sock)
 			})
 
+			this.registerSocket(peer.id, sock)
 			this.attachDataHandler(peer.id, sock)
-			sock.on('error', (err) => console.error(err))
-			sock.on('close', () => {
-				console.log(`sock close: [${this.self.id}] ←→ [${peer.id}]`)
-				this.sockets.delete(peer.id)
-				this.cleanupDrainSocket(sock)
+
+			sock.once('close', () => {
 				setTimeout(dial, 2_000)
 			})
 		}
@@ -152,26 +161,51 @@ export class TcpTransport extends Server implements CustomTransportStrategy {
 	}
 
 	/** Регистрируем сокет */
-	private registerSocket(id: string, sock: Socket) {
-		const prev = this.sockets.get(id)
+	private registerSocket(peerId: string, sock: Socket) {
+		const prev = this.sockets.get(peerId)
 		if (prev && prev !== sock) prev.destroy() // убиваем дубликат
 
-		this.sockets.set(id, sock)
+		this.sockets.set(peerId, sock)
+
 		sock
-			.once('close', this.cleanupDrainSocket.bind(this, sock))
-			.once('error', this.cleanupDrainSocket.bind(this, sock))
+			.once('error', (err) => console.error('error socker: ', err))
+			.once('close', () => {
+				console.log(`sock close: [${this.self.id}] ←→ [${peerId}]`)
+				this.deleteSocket(peerId)
+			})
+	}
+
+	private deleteSocket(
+		peerId: string,
+		sock: Socket | undefined = this.getSocket(peerId)
+	) {
+		if (!sock) {
+			return
+		}
+
+		this.deleteDecoder(sock)
+		this.cleanupDrainSocket(sock)
+		this.sockets.delete(peerId)
 	}
 
 	private cleanupDrainSocket(sock: Socket) {
 		this.drainSocketPromises.delete(sock)
 	}
 
+	private deleteDecoder(sock: Socket) {
+		const decoder = this.getDecoder(sock)
+		decoder.reset()
+		this.decoders.delete(sock)
+	}
+
+	getSocket(peerId: string) {
+		return this.sockets.get(peerId)
+	}
+
 	/** Парсим и читаем сообщение */
-	private attachDataHandler(
-		fromId: string,
-		sock: Socket,
-		decoder = new FrameDecoderService()
-	) {
+	private attachDataHandler(fromId: string, sock: Socket) {
+		const decoder = this.getDecoder(sock)
+
 		sock.on('data', async (chunk: Buffer) => {
 			for (let chunkCommand of decoder.push(chunk)) {
 				const command = chunkCommand as TcpCommandType
@@ -183,20 +217,16 @@ export class TcpTransport extends Server implements CustomTransportStrategy {
 
 	/** Отправить сообщение на все сокеты */
 	public async broadcast<T = any>(obj: TcpCommandType) {
-		console.log(
-			'Array.from(this.sockets.keys())',
-			Array.from(this.sockets.keys())
-		)
 		return await Promise.allSettled(
 			Array.from(this.sockets.keys()).map((peerId) =>
-				this.dataHandler.sendMessage<T>(this.sockets.get(peerId)!, obj, peerId)
+				this.dataHandler.sendMessage<T>(this.getSocket(peerId)!, obj, peerId)
 			)
 		)
 	}
 
 	/** Отправить сообщение по id сокета */
 	public sendToPeer(peerId: string, obj: TcpCommandType) {
-		const sock = this.sockets.get(peerId)
+		const sock = this.getSocket(peerId)
 
 		if (!sock) {
 			throw new Error('Socket is not defined')

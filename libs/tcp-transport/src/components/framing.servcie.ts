@@ -1,7 +1,8 @@
 import { decode, encode } from '@msgpack/msgpack'
 
-/** Версия протокола, в случае изменения сетевого протокола или формата сообщений поднять версию */
-/** Можно добавить совместимость со старыми версиями */
+/** Версия протокола, в случае изменения сетевого протокола или формата сообщений поднять версию
+ * Можно добавить совместимость со старыми версиями
+ * */
 const protocolVersion = 1
 
 export function encodeFrame(obj: unknown): Buffer {
@@ -21,8 +22,15 @@ export class FrameDecoderService {
 	/* защита от OOM / DDoS */
 	private maxBuffer = 4 * 1024 * 1024
 
+	/* todo: при событии close надо очистить декодер */
+	reset() {
+		this.buffer = Buffer.alloc(0)
+	}
+
 	push(chunk: Buffer): unknown[] {
-		this.buffer = Buffer.concat([this.buffer, chunk])
+		this.buffer = this.buffer.length
+			? Buffer.concat([this.buffer, chunk], this.buffer.length + chunk.length)
+			: chunk
 
 		if (this.buffer.length > this.maxBuffer) {
 			throw new Error('Inbound buffer overflow')
@@ -41,6 +49,11 @@ export class FrameDecoderService {
 
 			this.buffer = this.buffer.subarray(4 + len)
 		}
+
+		/* Buffer.from() создаёт новый буфер-копию ровно на размер хвоста (10 Б) и тем самым отпускает старый мегабайт. */
+		if (this.buffer.length && this.buffer.length < 4096)
+			this.buffer = Buffer.from(this.buffer)
+
 		return messages
 	}
 }

@@ -25,7 +25,10 @@ export class AppController {
 
 	@Post('/test')
 	async test() {
-		const test = await this.tcp.broadcast({ type: TcpTypesEnum.Default })
+		const test = await this.tcp.broadcast({
+			type: TcpTypesEnum.Default,
+			data: { test: 'test command' },
+		})
 		console.log('test', test)
 		return test
 	}

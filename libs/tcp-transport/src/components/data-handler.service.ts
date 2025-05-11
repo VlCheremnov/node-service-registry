@@ -40,6 +40,8 @@ export class DataHandlerService {
 				return
 			}
 
+			console.log('command', command)
+
 			const handler = this.transport.getHandler(command.type)
 			if (!handler) return
 
