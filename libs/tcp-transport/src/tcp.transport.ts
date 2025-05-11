@@ -74,14 +74,13 @@ export class TcpTransport extends Server implements CustomTransportStrategy {
 
 	/** Отправить сообщение на все сокеты */
 	public async broadcast<T = any>(obj: TcpCommandType) {
-		const { getSocket, sockets } = this.connectionManager
-
-		console.log('sockets', sockets)
-		console.log('this.connectionManager', this.connectionManager.sockets)
-
 		return await Promise.allSettled(
 			Array.from(this.connectionManager.sockets.keys()).map((peerId) =>
-				this.dataHandler.sendMessage<T>(getSocket(peerId)!, obj, peerId)
+				this.dataHandler.sendMessage<T>(
+					this.connectionManager.getSocket(peerId)!,
+					obj,
+					peerId
+				)
 			)
 		)
 	}
