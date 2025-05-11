@@ -1,4 +1,4 @@
-import { Inject, Injectable } from '@nestjs/common'
+import { forwardRef, Inject, Injectable } from '@nestjs/common'
 import {
 	EventEmitTcpDataType,
 	TcpCommandType,
@@ -11,19 +11,16 @@ import { Observable } from 'rxjs'
 import { encodeFrame } from '@lib/tcp-transport/components/framing.servcie'
 import { once } from 'node:events'
 import * as crypto from 'node:crypto'
+import { TcpTransport } from '@lib/tcp-transport'
 
 @Injectable()
-export class DataHandlerProvider {
+export class DataHandlerService {
 	private drainSocketPromises = new Map<Socket, Promise<void>>()
 	private responseTimeout: number
 
 	constructor(
-		@Inject('TCP_HANDLERS')
-		private readonly messageHandlers: ReadonlyMap<string, MessageHandler>,
-		@Inject('TCP_TRANSFORM_TO_OBSERVABLE')
-		private readonly transformToObservable: (
-			resultOrDeferred: any
-		) => Observable<any>,
+		@Inject(forwardRef(() => TcpTransport))
+		private readonly transport: TcpTransport,
 		@Inject('TCP_OPTIONS') private readonly cfg: TcpOptions
 	) {
 		this.responseTimeout = this.cfg.responseTimeout ?? 1_000
@@ -43,11 +40,11 @@ export class DataHandlerProvider {
 				return
 			}
 
-			const handler = this.messageHandlers.get(command.type)
+			const handler = this.transport.getHandler(command.type)
 			if (!handler) return
 
 			// Nest ждёт Observable/Promise/значение
-			const resp$ = this.transformToObservable(await handler(command))
+			const resp$ = this.transport.transformToObservable(await handler(command))
 			// если есть ответ — отправляем обратно
 			resp$.subscribe(async (data) => {
 				if (data && command.id) {
@@ -75,8 +72,6 @@ export class DataHandlerProvider {
 	): Promise<TcpResponse<T>> {
 		/* Формируем уникальный id запроса */
 		const id = crypto.randomUUID().replace(/-/g, '')
-
-		console.log('id', id)
 
 		await this.safeWrite(sock, { ...payload, id } as TcpCommandType)
 

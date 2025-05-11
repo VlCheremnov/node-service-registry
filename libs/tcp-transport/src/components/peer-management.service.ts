@@ -4,7 +4,7 @@ import { TCP_PORT } from '@lib/tcp-transport/constants'
 import * as crypto from 'node:crypto'
 
 @Injectable()
-export class PeerManagementProvider {
+export class PeerManagementService {
 	/* Список TCP агентов */
 	public peers: PeerInfo[]
 	/* Текущий TCP агент */

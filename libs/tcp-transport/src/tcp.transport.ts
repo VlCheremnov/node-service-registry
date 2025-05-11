@@ -15,8 +15,8 @@ import { PeerInfo, TcpCommandType, TcpOptions } from '@lib/tcp-transport/types'
 import { TcpTypesEnum } from '@lib/tcp-transport/enums'
 import { forwardRef, Inject, Injectable } from '@nestjs/common'
 import { FrameDecoderService } from '@lib/tcp-transport/components/framing.servcie'
-import { PeerManagementProvider } from '@lib/tcp-transport/components/peer-management.provider'
-import { DataHandlerProvider } from '@lib/tcp-transport/components/data-handler.provider'
+import { PeerManagementService } from '@lib/tcp-transport/components/peer-management.service'
+import { DataHandlerService } from '@lib/tcp-transport/components/data-handler.service'
 
 @Injectable()
 export class TcpTransport extends Server implements CustomTransportStrategy {
@@ -27,10 +27,10 @@ export class TcpTransport extends Server implements CustomTransportStrategy {
 
 	constructor(
 		@Inject('TCP_OPTIONS') private readonly opts: TcpOptions,
-		@Inject(forwardRef(() => PeerManagementProvider))
-		private peerManagement: PeerManagementProvider,
-		@Inject(forwardRef(() => DataHandlerProvider))
-		private dataHandler: DataHandlerProvider
+		// @Inject(forwardRef(() => PeerManagementService))
+		private peerManagement: PeerManagementService,
+		// @Inject(forwardRef(() => DataHandlerService))
+		private dataHandler: DataHandlerService
 	) {
 		super()
 	}
@@ -43,8 +43,8 @@ export class TcpTransport extends Server implements CustomTransportStrategy {
 		return this.peerManagement.peers
 	}
 
-	get handlers(): ReadonlyMap<string, MessageHandler> {
-		return this.messageHandlers
+	getHandler(type: TcpTypesEnum) {
+		return this.messageHandlers.get(type)
 	}
 
 	/**
