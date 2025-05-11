@@ -5,63 +5,57 @@
  *    4. Описание в README и JSDoc
  *    */
 
-import { CustomTransportStrategy, Server } from '@nestjs/microservices'
+import {
+	CustomTransportStrategy,
+	MessageHandler,
+	Server,
+} from '@nestjs/microservices'
 import { createServer, Socket, Server as NetServer } from 'net'
-import {
-	PeerInfo,
-	TcpCommandType,
-	EventEmitTcpDataType,
-	TcpOptions,
-	TcpResponse,
-} from '@lib/tcp-transport/types'
+import { PeerInfo, TcpCommandType, TcpOptions } from '@lib/tcp-transport/types'
 import { TcpTypesEnum } from '@lib/tcp-transport/enums'
-import * as crypto from 'node:crypto'
-import { once } from 'node:events'
-import { TCP_PORT } from '@lib/tcp-transport/constants'
-import { Inject, Injectable } from '@nestjs/common'
-import {
-	encodeFrame,
-	FrameDecoderService,
-} from '@lib/tcp-transport/components/framing.servcie'
+import { forwardRef, Inject, Injectable } from '@nestjs/common'
+import { FrameDecoderService } from '@lib/tcp-transport/components/framing.servcie'
 import { PeerManagementProvider } from '@lib/tcp-transport/components/peer-management.provider'
+import { DataHandlerProvider } from '@lib/tcp-transport/components/data-handler.provider'
 
 @Injectable()
 export class TcpTransport extends Server implements CustomTransportStrategy {
 	private server: NetServer
-	private readonly responseTimeout: number
 	private drainSocketPromises = new Map<Socket, Promise<void>>()
 	/* Список TCP соединений */
 	private sockets = new Map<string, Socket>()
-	/* Список TCP агентов */
-	public peers: PeerInfo[]
-	/* Текущий TCP агент */
-	public readonly self: PeerInfo
 
 	constructor(
 		@Inject('TCP_OPTIONS') private readonly opts: TcpOptions,
-		public peerManagement: PeerManagementProvider
+		@Inject(forwardRef(() => PeerManagementProvider))
+		private peerManagement: PeerManagementProvider,
+		@Inject(forwardRef(() => DataHandlerProvider))
+		private dataHandler: DataHandlerProvider
 	) {
 		super()
+	}
 
-		const { self, filteredPeers } = this.peerManagement.buildPeerList(
-			opts.host,
-			opts.port ?? TCP_PORT,
-			opts.peers
-		)
+	public get self() {
+		return this.peerManagement.self
+	}
 
-		this.self = self
-		this.peers = filteredPeers
-		this.responseTimeout = opts.responseTimeout ?? 1_000
+	public get peers() {
+		return this.peerManagement.peers
+	}
+
+	get handlers(): ReadonlyMap<string, MessageHandler> {
+		return this.messageHandlers
 	}
 
 	/**
 	 * Triggered when you run "app.listen()".
 	 */
-	listen(callback: () => void) {
+	listen(cb: () => void) {
+		/** Ждем пока все соединения пройдут и после вызываем callback */
 		this.startListener()
 		this.startDialers()
 		// setInterval(() => this.pingAll(), 2_000)
-		callback()
+		cb()
 	}
 	/** Пингуем все сокеты */
 	private pingAll() {
@@ -140,7 +134,7 @@ export class TcpTransport extends Server implements CustomTransportStrategy {
 
 			sock.connect(peer.port, peer.host, () => {
 				console.log(`[${this.self.id}] → dial ${peer.id}`)
-				this.safeWrite(sock, this.self.id)
+				this.dataHandler.safeWrite(sock, this.self.id)
 				this.registerSocket(peer.id, sock)
 			})
 
@@ -180,39 +174,9 @@ export class TcpTransport extends Server implements CustomTransportStrategy {
 	) {
 		sock.on('data', async (chunk: Buffer) => {
 			for (let chunkCommand of decoder.push(chunk)) {
-				try {
-					const command = chunkCommand as TcpCommandType
+				const command = chunkCommand as TcpCommandType
 
-					if (command.isResponse) {
-						console.log('Получаем ответ')
-						sock.emit(`response:${command.id}`, command.data)
-						return
-					}
-
-					const handler = this.messageHandlers.get(command.type)
-					if (!handler) return
-
-					const eventData: EventEmitTcpDataType = { ...command, fromId }
-
-					// Nest ждёт Observable/Promise/значение
-					const resp$ = this.transformToObservable(await handler(eventData))
-					// если есть ответ — отправляем обратно
-					resp$.subscribe(async (data) => {
-						if (data && command.id) {
-							/* Отправляем ответ обратно */
-							console.log('Отправляем ответ: ', data)
-							return this.safeWrite(sock, {
-								isResponse: true,
-								type: command.type,
-								id: command.id,
-								data,
-							})
-						}
-					})
-				} catch (err) {
-					/* bad frame — игнорируем или логируем */
-					console.error('tcp onData err', err)
-				}
+				this.dataHandler.acceptRequest({ ...command, fromId }, sock)
 			}
 		})
 	}
@@ -225,7 +189,7 @@ export class TcpTransport extends Server implements CustomTransportStrategy {
 		)
 		return await Promise.allSettled(
 			Array.from(this.sockets.keys()).map((peerId) =>
-				this.sendMessage<T>(this.sockets.get(peerId)!, obj, peerId)
+				this.dataHandler.sendMessage<T>(this.sockets.get(peerId)!, obj, peerId)
 			)
 		)
 	}
@@ -238,88 +202,6 @@ export class TcpTransport extends Server implements CustomTransportStrategy {
 			throw new Error('Socket is not defined')
 		}
 
-		return this.sendMessage(sock, obj, peerId)
-	}
-
-	async sendMessage<T = any>(
-		sock: Socket,
-		payload: TcpCommandType,
-		peerId: string
-	): Promise<TcpResponse<T>> {
-		const id = crypto.randomUUID()
-
-		await this.safeWrite(sock, { ...payload, id } as TcpCommandType)
-
-		return new Promise(async (resolve, reject) => {
-			const event = `response:${id}`
-			const ac = new AbortController()
-
-			setTimeout(
-				() => ac.abort(new Error('TIMEOUT 10 с')),
-				this.responseTimeout
-			)
-
-			try {
-				const [payload] = await once(sock, event, {
-					signal: ac.signal,
-				})
-
-				resolve({ peerId, payload } as TcpResponse<T>)
-			} catch (err) {
-				if (err.code === 'ABORT_ERR') {
-					err = new Error('Timeout')
-					resolve({
-						peerId,
-						err: {
-							name: 'Timeout',
-							message: `Request timed out after ${this.responseTimeout}ms`,
-							code: 'TIMEOUT',
-						},
-					} as TcpResponse<T>)
-				} else {
-					reject(err)
-				}
-			}
-		})
-	}
-
-	/** Отправляем сообщение */
-	private async safeWrite(
-		sock: Socket,
-		data: string | number | Record<any, any>
-	) {
-		/**
-		 * Если send-буфер забит, то ждем "drain".
-		 * "drain" гарантирует, что ОС освободила место для следующих пакетов. Тот пакет, ради которого вернулся false, уже в буфере ядра и отправится сам.
-		 * */
-		const frame = encodeFrame(data)
-
-		if (sock.write(frame)) return
-
-		// Ждем пока освободится буфер или 5 секунд
-		await Promise.race([
-			this.getDrainPromise(sock),
-			/*todo: вынести таймаут в переменные*/
-			new Promise((resolve, reject) =>
-				setTimeout(() => reject(new Error('DRain timeout >5s')), 5_000)
-			),
-		])
-
-		// Если повторный запрос не ушел - считаем его "тяжелым" и закрываем сокет
-		/* todo: Продумать реконект или что-нибудь еше */
-		if (!sock.write(frame)) {
-			sock.destroy(new Error('Persistent back-pressure'))
-		}
-	}
-
-	private getDrainPromise(sock: Socket): Promise<void> {
-		let promise = this.drainSocketPromises.get(sock)
-		if (!promise) {
-			promise = once(sock, 'drain').then(() => {
-				this.cleanupDrainSocket(sock)
-			})
-			this.drainSocketPromises.set(sock, promise)
-		}
-		return promise
+		return this.dataHandler.sendMessage(sock, obj, peerId)
 	}
 }
