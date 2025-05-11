@@ -129,7 +129,6 @@ export class DataHandlerService {
 		// Ждем пока освободится буфер или 5 секунд
 		await Promise.race([
 			this.getDrainPromise(sock),
-			/*todo: вынести таймаут в переменные*/
 			new Promise((resolve, reject) =>
 				setTimeout(() => reject(new Error('DRain timeout >5s')), 5_000)
 			),

@@ -63,7 +63,6 @@ export class ConnectionManagerService {
 					return
 				}
 				this.registerSocket(peerId, sock)
-				this.attachDataHandler(peerId, sock)
 			})
 		})
 		this.server.listen(this.self.port, () => {
@@ -89,7 +88,6 @@ export class ConnectionManagerService {
 			})
 
 			this.registerSocket(peer.id, sock)
-			this.attachDataHandler(peer.id, sock)
 
 			sock.once('close', () => {
 				setTimeout(dial, 2_000)
@@ -114,8 +112,11 @@ export class ConnectionManagerService {
 				)
 				this.deleteSocket(peerId)
 			})
+
+		this.attachDataHandler(peerId, sock)
 	}
 
+	/** Удаляем сокет */
 	private deleteSocket(
 		peerId: string,
 		sock: Socket | undefined = this.getSocket(peerId)
@@ -129,6 +130,7 @@ export class ConnectionManagerService {
 		this.sockets.delete(peerId)
 	}
 
+	/** Удаляем декодер */
 	private deleteDecoder(sock: Socket) {
 		const decoder = this.getDecoder(sock)
 		decoder.reset()
@@ -140,6 +142,7 @@ export class ConnectionManagerService {
 		return this.decoders.get(sock) ?? this.createAndRegisterDecoder(sock)
 	}
 
+	/** Получаем сокет по id */
 	public getSocket(peerId: string) {
 		return this.sockets.get(peerId)
 	}
@@ -156,6 +159,8 @@ export class ConnectionManagerService {
 		const decoder = this.getDecoder(sock)
 
 		sock.on('data', async (chunk: Buffer) => {
+			if (this.isCloseServer) throw new Error('Server is closed!')
+
 			for (let chunkCommand of decoder.push(chunk)) {
 				const command = chunkCommand as TcpCommandType
 
