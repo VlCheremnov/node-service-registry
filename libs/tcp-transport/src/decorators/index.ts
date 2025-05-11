@@ -11,23 +11,16 @@ export function TcpEvent(event: TcpTypesEnum): MethodDecorator {
 	return MessagePattern(event)
 }
 
-export const Data = () => {
-	createParamDecorator((_: unknown, ctx: ExecutionContext) => {
-		const { data }: EventEmitTcpDataType<any> = ctx.switchToRpc().getData() // то, что транспорт передал
+export const Data = createParamDecorator(
+	(_: unknown, ctx: ExecutionContext) => {
+		const { data }: EventEmitTcpDataType<any> = ctx.switchToRpc().getData()
 		return data
-	})()
-}
+	}
+)
 
-export const FromId = () => {
-	createParamDecorator((_: unknown, ctx: ExecutionContext) => {
+export const FromId = createParamDecorator(
+	(_: unknown, ctx: ExecutionContext) => {
 		const { fromId }: EventEmitTcpDataType<any> = ctx.switchToRpc().getData() // то, что транспорт передал
 		return fromId
-	})()
-}
-
-export const Type = () => {
-	createParamDecorator((_: unknown, ctx: ExecutionContext) => {
-		const { type }: EventEmitTcpDataType<any> = ctx.switchToRpc().getData() // то, что транспорт передал
-		return type
-	})()
-}
+	}
+)

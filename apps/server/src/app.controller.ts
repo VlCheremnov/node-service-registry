@@ -1,8 +1,8 @@
 import { Controller, Post } from '@nestjs/common'
 import { AppService } from './app.service'
-import { MessagePattern } from '@nestjs/microservices'
 import { TcpTypesEnum } from '@lib/tcp-transport/enums'
 import { TcpTransport } from '@lib/tcp-transport'
+import { Data, FromId, TcpEvent } from '@lib/tcp-transport/decorators'
 
 @Controller()
 export class AppController {
@@ -11,14 +11,15 @@ export class AppController {
 		private readonly tcp: TcpTransport
 	) {}
 
-	@MessagePattern(TcpTypesEnum.Ping)
+	@TcpEvent(TcpTypesEnum.Ping)
 	getHello() {
 		return this.appService.ping()
 	}
 
-	@MessagePattern(TcpTypesEnum.Default)
-	TestTcpEvent() {
-		console.log('test true')
+	@TcpEvent(TcpTypesEnum.Default)
+	TestTcpEvent(@Data() data: any, @FromId() fromId: string) {
+		console.log('test true', data)
+		console.log('fromId', fromId)
 
 		return 'test'
 	}
