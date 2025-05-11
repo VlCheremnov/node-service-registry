@@ -18,6 +18,8 @@ export class DataHandlerService {
 	private drainSocketPromises = new Map<Socket, Promise<void>>()
 	private responseTimeout: number
 
+	private drainDelay = 3_000
+
 	constructor(
 		@Inject(forwardRef(() => TcpTransport))
 		private readonly transport: TcpTransport,
@@ -130,7 +132,10 @@ export class DataHandlerService {
 		await Promise.race([
 			this.getDrainPromise(sock),
 			new Promise((resolve, reject) =>
-				setTimeout(() => reject(new Error('DRain timeout >5s')), 5_000)
+				setTimeout(
+					() => reject(new Error('DRain timeout >5s')),
+					this.drainDelay
+				)
 			),
 		])
 

@@ -14,6 +14,8 @@ export class ConnectionManagerService {
 	/* Список TCP соединений */
 	public sockets = new Map<string, Socket>()
 
+	private reconnectDelay = 2_000
+
 	constructor(
 		@Inject(forwardRef(() => PeerManagementService))
 		private peerManagement: PeerManagementService,
@@ -90,7 +92,7 @@ export class ConnectionManagerService {
 			this.registerSocket(peer.id, sock)
 
 			sock.once('close', () => {
-				setTimeout(dial, 2_000)
+				setTimeout(dial, this.reconnectDelay)
 			})
 		}
 
