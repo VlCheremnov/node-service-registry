@@ -1,0 +1,20 @@
+services:
+  server:
+#    env_file:
+#      - ./.env
+    build:
+      context: .
+      dockerfile: Dockerfile
+    working_dir: /packages/service-registry
+    command: npm run start:dev
+    volumes:
+      - ../apps:/packages/service-registry/apps
+      - ../libs:/packages/service-registry/libs
+      - ../dist:/packages/service-registry/dist
+      - ../nest-cli.json:/packages/service-registry/nest-cli.json
+      - ../package.json:/packages/service-registry/package.json
+      - ../webpack-hmr.config.js:/packages/service-registry/webpack-hmr.config.js
+      - ../tsconfig.json:/packages/service-registry/tsconfig.json
+      - ../tsconfig.build.json:/packages/service-registry/tsconfig.build.json
+
+      - ../node_modules:/packages/service-registry/node_modules

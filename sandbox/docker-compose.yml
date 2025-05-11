@@ -1,0 +1,101 @@
+services:
+  sandbox-server-1:
+    extends:
+      file: registry-config.yml
+      service: server
+    container_name: sandbox-server-1
+    ports:
+      - "40001:80"
+    environment:
+#      - PORT=80
+      - TCP_HOST=sandbox-server-1
+      - PEERS=sandbox-server-2
+#      - PEERS=sandbox-server-2,sandbox-server-3,sandbox-server-4,sandbox-server-5
+    volumes:
+      - data-1:/level-db/data
+      - dist-1:/packages/service-registry/dist
+    networks:
+      - sandbox
+
+  sandbox-server-2:
+    extends:
+      file: registry-config.yml
+      service: server
+    container_name: sandbox-server-2
+    ports:
+      - "40002:80"
+    environment:
+#      - PORT=80
+      - TCP_HOST=sandbox-server-2
+      - PEERS=sandbox-server-1
+#      - PEERS=sandbox-server-1,sandbox-server-3,sandbox-server-4,sandbox-server-5
+    volumes:
+      - data-2:/level-db/data
+      - dist-2:/packages/service-registry/dist
+    networks:
+      - sandbox
+
+#  sandbox-server-3:
+#    extends:
+#      file: registry-config.yml
+#      service: server
+#    container_name: sandbox-server-3
+#    ports:
+#      - "40003:80"
+#    environment:
+#      - PORT=80
+#      - TCP_HOST=sandbox-server-3
+#      - PEERS=sandbox-server-1,sandbox-server-2,sandbox-server-4,sandbox-server-5
+#    volumes:
+#      - data-3:/level-db/data
+#    networks:
+#      - sandbox
+#
+#  sandbox-server-4:
+#    extends:
+#      file: registry-config.yml
+#      service: server
+#    container_name: sandbox-server-4
+#    ports:
+#      - "40004:80"
+#    environment:
+#      - PORT=80
+#      - TCP_HOST=sandbox-server-4
+#      - PEERS=sandbox-server-1,sandbox-server-2,sandbox-server-3,sandbox-server-5
+#    volumes:
+#      - data-4:/level-db/data
+#    networks:
+#      - sandbox
+#
+#  sandbox-server-5:
+#    extends:
+#      file: registry-config.yml
+#      service: server
+#    container_name: sandbox-server-5
+#    ports:
+#      - "40005:80"
+#    environment:
+#      - PORT=80
+#      - TCP_HOST=sandbox-server-5
+#      - PEERS=sandbox-server-1,sandbox-server-2,sandbox-server-3,sandbox-server-4
+#    volumes:
+#      - data-5:/level-db/data
+#    networks:
+#      - sandbox
+
+volumes:
+  data-1:
+  data-2:
+  data-3:
+  data-4:
+  data-5:
+  dist-1:
+  dist-2:
+  dist-3:
+  dist-4:
+  dist-5:
+
+networks:
+  sandbox:
+    # Specify driver options
+    driver: bridge
