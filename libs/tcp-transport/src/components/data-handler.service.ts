@@ -31,6 +31,10 @@ export class DataHandlerService {
 		return `response:${id}`
 	}
 
+	public close() {
+		this.drainSocketPromises.clear()
+	}
+
 	/** Обрабатываем ответ и отправляем ответ, если он есть */
 	async acceptRequest(command: EventEmitTcpDataType, sock: Socket) {
 		try {
@@ -151,7 +155,7 @@ export class DataHandlerService {
 	}
 
 	/** Подчищаем неиспользуемые промисы */
-	private cleanupDrainSocket(sock: Socket) {
+	public cleanupDrainSocket(sock: Socket) {
 		this.drainSocketPromises.delete(sock)
 	}
 }

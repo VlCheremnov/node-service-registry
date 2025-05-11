@@ -1,5 +1,6 @@
 {
   "compilerOptions": {
+    "inlineSources": true,
     "module": "commonjs",
     "declaration": true,
     "removeComments": true,

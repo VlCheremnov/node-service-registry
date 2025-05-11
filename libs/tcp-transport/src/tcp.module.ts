@@ -3,6 +3,7 @@ import { PeerManagementService } from './components/peer-management.service'
 import { TcpTransport } from './tcp.transport'
 import { TcpModuleAsyncOptions, TcpOptions } from '@lib/tcp-transport/types'
 import { DataHandlerService } from '@lib/tcp-transport/components/data-handler.service'
+import { ConnectionManagerService } from '@lib/tcp-transport/components/connection-manager.service'
 
 @Global()
 @Module({})
@@ -28,23 +29,12 @@ export class TcpModule {
 			providers: [
 				PeerManagementService,
 				DataHandlerService,
+				ConnectionManagerService,
 				{
 					provide: 'TCP_OPTIONS',
 					useFactory: options.useFactory, // ← получаем opts из async-функции
 					inject: options.inject || [],
 				},
-				// {
-				// 	/** todo: export const TCP_HANDLERS = Symbol('TCP_HANDLERS') */
-				// 	provide: 'TCP_HANDLERS',
-				// 	useFactory: (transport: TcpTransport) => transport.handlers,
-				// 	inject: [TcpTransport],
-				// },
-				// {
-				// 	provide: 'TCP_TRANSFORM_TO_OBSERVABLE',
-				// 	useFactory: (transport: TcpTransport) =>
-				// 		transport.transformToObservable,
-				// 	inject: [TcpTransport],
-				// },
 				TcpTransport,
 			],
 			exports: [TcpTransport],

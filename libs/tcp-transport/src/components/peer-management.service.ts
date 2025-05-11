@@ -54,4 +54,9 @@ export class PeerManagementService {
 			.digest('hex')
 			.toString()
 	}
+
+	close() {
+		this.peers = []
+		this.self = this.peers[0]
+	}
 }
