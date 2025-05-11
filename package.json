@@ -95,6 +95,7 @@
       "<rootDir>/libs/"
     ],
     "moduleNameMapper": {
+      "^@lib/database(|/.*)$": "<rootDir>/libs/database/src/$1",
       "^@lib/shared(|/.*)$": "<rootDir>/libs/shared/src/$1",
       "^@lib/tcp-transport(|/.*)$": "<rootDir>/libs/tcp-transport/src/$1"
     }

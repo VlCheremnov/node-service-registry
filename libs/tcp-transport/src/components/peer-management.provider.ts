@@ -1,28 +1,31 @@
-import { Injectable } from '@nestjs/common'
-import { PeerInfo } from '@lib/tcp-transport/types'
+import { Inject, Injectable } from '@nestjs/common'
+import { PeerInfo, TcpOptions } from '@lib/tcp-transport/types'
 import { TCP_PORT } from '@lib/tcp-transport/constants'
 import * as crypto from 'node:crypto'
 
 @Injectable()
 export class PeerManagementProvider {
-	constructor() {}
+	/* Список TCP агентов */
+	public peers: PeerInfo[]
+	/* Текущий TCP агент */
+	public self: PeerInfo
 
-	public buildPeerList(
-		selfPeerHost: string,
-		selfPeerPort: number = TCP_PORT,
-		otherPeers: string[]
-	) {
+	constructor(@Inject('TCP_OPTIONS') private readonly cfg: TcpOptions) {
+		const {
+			peers: otherPeers,
+			host: selfPeerHost,
+			port: selfPeerPort = TCP_PORT,
+		} = this.cfg
+
 		const formatedPeers = this.formatPeerInfo([
 			...otherPeers,
 			`${selfPeerHost}:${selfPeerPort}`,
 		])
 
-		const self = formatedPeers.find(
+		this.self = formatedPeers.find(
 			(peer) => peer.host === selfPeerHost && peer.port == selfPeerPort
 		)!
-		const filteredPeers = formatedPeers.filter((p) => p.id !== self.id)
-
-		return { filteredPeers, self }
+		this.peers = formatedPeers.filter((p) => p.id !== this.self.id)
 	}
 
 	/** Формируем объект { id, host, port } */

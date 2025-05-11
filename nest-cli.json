@@ -10,13 +10,13 @@
   "monorepo": true,
   "root": "apps/server",
   "projects": {
-    "client": {
-      "type": "application",
-      "root": "apps/client",
-      "entryFile": "main",
-      "sourceRoot": "apps/client/src",
+    "database": {
+      "type": "library",
+      "root": "libs/database",
+      "entryFile": "index",
+      "sourceRoot": "libs/database/src",
       "compilerOptions": {
-        "tsConfigPath": "apps/client/tsconfig.app.json"
+        "tsConfigPath": "libs/database/tsconfig.lib.json"
       }
     },
     "server": {
