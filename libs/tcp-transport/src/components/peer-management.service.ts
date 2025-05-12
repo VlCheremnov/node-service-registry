@@ -57,6 +57,6 @@ export class PeerManagementService {
 
 	close() {
 		this.peers = []
-		this.self = this.peers[0]
+		this.self = null as any
 	}
 }

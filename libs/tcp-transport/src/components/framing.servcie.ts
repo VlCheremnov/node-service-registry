@@ -1,4 +1,5 @@
 import { decode, encode } from '@msgpack/msgpack'
+import { MAX_BUFFER } from '@lib/tcp-transport/constants'
 
 /** Версия протокола, в случае изменения сетевого протокола или формата сообщений поднять версию
  * Можно добавить совместимость со старыми версиями
@@ -9,7 +10,7 @@ export function encodeFrame(obj: unknown): Buffer {
 	const body = Buffer.from(encode(obj)) // ⬅️  оборачиваем
 	const frame = Buffer.allocUnsafe(4 + 1 + body.length)
 
-	frame.writeUInt32BE(1 + body.length, 0) // length
+	frame.writeUInt32BE(body.length + 1, 0) // length
 	frame.writeUInt8(protocolVersion, 4) // version
 	body.copy(frame, 5) // теперь copy работает
 
@@ -19,8 +20,6 @@ export function encodeFrame(obj: unknown): Buffer {
 /** Декодирование. 1 сокет = 1 инстанс  */
 export class FrameDecoderService {
 	private buffer = Buffer.alloc(0)
-	/* защита от OOM / DDoS */
-	private maxBuffer = 4 * 1024 * 1024
 
 	/* todo: при событии close надо очистить декодер */
 	reset() {
@@ -32,7 +31,8 @@ export class FrameDecoderService {
 			? Buffer.concat([this.buffer, chunk], this.buffer.length + chunk.length)
 			: chunk
 
-		if (this.buffer.length > this.maxBuffer) {
+		/* защита от OOM / DDoS */
+		if (this.buffer.length > MAX_BUFFER) {
 			throw new Error('Inbound buffer overflow')
 		}
 

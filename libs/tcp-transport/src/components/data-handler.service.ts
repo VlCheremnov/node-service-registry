@@ -12,6 +12,11 @@ import { encodeFrame } from '@lib/tcp-transport/components/framing.servcie'
 import { once } from 'node:events'
 import * as crypto from 'node:crypto'
 import { TcpTransport } from '@lib/tcp-transport'
+import {
+	DEFAULT_RESPONSE_TIMEOUT,
+	DRAIN_DELAY,
+	RESPONSE_PREFIX,
+} from '@lib/tcp-transport/constants'
 
 @Injectable()
 export class DataHandlerService {
@@ -20,19 +25,17 @@ export class DataHandlerService {
 	private drainSocketPromises = new Map<Socket, Promise<void>>()
 	private responseTimeout: number
 
-	private drainDelay = 3_000
-
 	constructor(
 		@Inject(forwardRef(() => TcpTransport))
 		private readonly transport: TcpTransport,
 		@Inject('TCP_OPTIONS') private readonly cfg: TcpOptions
 	) {
-		this.responseTimeout = this.cfg.responseTimeout ?? 1_000
+		this.responseTimeout = this.cfg.responseTimeout ?? DEFAULT_RESPONSE_TIMEOUT
 	}
 
 	/** Формируем наименование ивента для ответа */
 	private getResponseEventName(id: string) {
-		return `response:${id}`
+		return `${RESPONSE_PREFIX}${id}`
 	}
 
 	public close() {
@@ -135,10 +138,7 @@ export class DataHandlerService {
 		await Promise.race([
 			this.getDrainPromise(sock),
 			new Promise((resolve, reject) =>
-				setTimeout(
-					() => reject(new Error('DRain timeout >5s')),
-					this.drainDelay
-				)
+				setTimeout(() => reject(new Error('DRain timeout >5s')), DRAIN_DELAY)
 			),
 		])
 

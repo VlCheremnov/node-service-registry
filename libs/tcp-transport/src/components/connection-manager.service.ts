@@ -4,6 +4,10 @@ import { DataHandlerService } from '@lib/tcp-transport/components/data-handler.s
 import { createServer, Server as NetServer, Socket } from 'net'
 import { FrameDecoderService } from '@lib/tcp-transport/components/framing.servcie'
 import { PeerInfo, TcpCommandType } from '@lib/tcp-transport/types'
+import {
+	DEFAULT_RECONNECT_DELAY,
+	PENDING_BEFORE_CLOSING_DELAY,
+} from '@lib/tcp-transport/constants'
 
 @Injectable()
 export class ConnectionManagerService {
@@ -16,8 +20,6 @@ export class ConnectionManagerService {
 	/* Список TCP соединений */
 	public sockets = new Map<string, Socket>()
 
-	private reconnectDelay = 2_000
-
 	constructor(
 		@Inject(forwardRef(() => PeerManagementService))
 		private peerManagement: PeerManagementService,
@@ -28,8 +30,10 @@ export class ConnectionManagerService {
 	/** Закрытие приложения/транспорта */
 	public async close() {
 		this.isCloseServer = true
-		/* todo: Добавить пендинг запросов на 2-5 секунды, чтобы все запросы успели получить/отдать ответ */
-		await new Promise((resolve) => setTimeout(resolve, 3_000))
+
+		await new Promise((resolve) =>
+			setTimeout(resolve, PENDING_BEFORE_CLOSING_DELAY)
+		)
 
 		for (const s of this.sockets.values()) {
 			s.destroy()
@@ -94,7 +98,7 @@ export class ConnectionManagerService {
 			this.registerSocket(peer.id, sock)
 
 			sock.once('close', () => {
-				setTimeout(dial, this.reconnectDelay)
+				setTimeout(dial, DEFAULT_RECONNECT_DELAY)
 			})
 		}
 
