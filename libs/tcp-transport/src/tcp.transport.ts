@@ -3,18 +3,18 @@
  *    2. TLS-шифрование и аутентификация
  *    3. RxJS поверх TCP
  *    4. Описание в README и JSDoc
+ *    5. Метрики
+ *    6. Тесты
+ *      - Юнит-тесты
+ *      - E2E-тест
+ *      - Contract-тесты
+ *      - Нагрузочный тест
  *    */
 
-import {
-	CustomTransportStrategy,
-	MessageHandler,
-	Server,
-} from '@nestjs/microservices'
-import { createServer, Socket, Server as NetServer } from 'net'
-import { PeerInfo, TcpCommandType, TcpOptions } from '@lib/tcp-transport/types'
+import { CustomTransportStrategy, Server } from '@nestjs/microservices'
+import { TcpCommandType, TcpOptions } from '@lib/tcp-transport/types'
 import { TcpTypesEnum } from '@lib/tcp-transport/enums'
 import { forwardRef, Inject, Injectable } from '@nestjs/common'
-import { FrameDecoderService } from '@lib/tcp-transport/components/framing.servcie'
 import { PeerManagementService } from '@lib/tcp-transport/components/peer-management.service'
 import { DataHandlerService } from '@lib/tcp-transport/components/data-handler.service'
 import { ConnectionManagerService } from '@lib/tcp-transport/components/connection-manager.service'
@@ -22,7 +22,6 @@ import { ConnectionManagerService } from '@lib/tcp-transport/components/connecti
 @Injectable()
 export class TcpTransport extends Server implements CustomTransportStrategy {
 	constructor(
-		@Inject('TCP_OPTIONS') private readonly opts: TcpOptions,
 		@Inject(forwardRef(() => PeerManagementService))
 		private peerManagement: PeerManagementService,
 		@Inject(forwardRef(() => DataHandlerService))

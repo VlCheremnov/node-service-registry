@@ -1,12 +1,14 @@
 import { NestFactory } from '@nestjs/core'
 import { AppModule } from './app.module'
-import { TcpModule } from '@lib/tcp-transport/tcp.module'
 import { TcpTransport } from '@lib/tcp-transport'
+import { ConsoleLogger } from '@nestjs/common'
 
 declare const module: any
 
 async function bootstrap() {
-	const ctx = await NestFactory.createApplicationContext(AppModule)
+	const ctx = await NestFactory.createApplicationContext(AppModule, {
+		logger: console,
+	})
 
 	const transport = ctx.get(TcpTransport)
 
@@ -23,7 +25,12 @@ async function bootstrap() {
 }
 
 async function bootstrapTestHttp() {
-	const app = await NestFactory.create(AppModule)
+	const app = await NestFactory.create(AppModule, {
+		logger: new ConsoleLogger({
+			timestamp: true,
+			compact: false,
+		}),
+	})
 	const transport = app.get(TcpTransport)
 	app.connectMicroservice({ strategy: transport })
 	await app.startAllMicroservices()

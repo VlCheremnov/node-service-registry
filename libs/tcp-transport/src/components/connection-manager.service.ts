@@ -1,4 +1,4 @@
-import { forwardRef, Inject, Injectable } from '@nestjs/common'
+import { forwardRef, Inject, Injectable, Logger } from '@nestjs/common'
 import { PeerManagementService } from '@lib/tcp-transport/components/peer-management.service'
 import { DataHandlerService } from '@lib/tcp-transport/components/data-handler.service'
 import { createServer, Server as NetServer, Socket } from 'net'
@@ -7,6 +7,8 @@ import { PeerInfo, TcpCommandType } from '@lib/tcp-transport/types'
 
 @Injectable()
 export class ConnectionManagerService {
+	private readonly logger = new Logger(ConnectionManagerService.name)
+
 	private isCloseServer: boolean = false
 	private server: NetServer
 	/* Список декодеров на каждый сокет */
@@ -59,7 +61,7 @@ export class ConnectionManagerService {
 			/* Создаем первое подключение между сокетами на регистрацию сокета в текущем кластере */
 			sock.once('data', (chunk: Buffer) => {
 				const [peerId] = decoder.push(chunk) as string[]
-				console.log('once', peerId)
+				this.logger.log('once', peerId)
 				if (!/^[0-9a-f]{40}$/i.test(peerId)) {
 					sock.destroy(new Error('Bad peerId'))
 					return
@@ -68,7 +70,7 @@ export class ConnectionManagerService {
 			})
 		})
 		this.server.listen(this.self.port, () => {
-			console.log(`[${this.self.id}] TCP listen ${this.self.port}`)
+			this.logger.log(`[${this.self.id}] TCP listen ${this.self.port}`)
 		})
 	}
 	/** Подключаем исходящие пиры */
@@ -85,7 +87,7 @@ export class ConnectionManagerService {
 			const sock = new Socket()
 
 			sock.connect(peer.port, peer.host, () => {
-				console.log(`[${this.peerManagement.self.id}] → dial ${peer.id}`)
+				this.logger.log(`[${this.peerManagement.self.id}] → dial ${peer.id}`)
 				this.dataHandler.safeWrite(sock, this.peerManagement.self.id)
 			})
 
@@ -107,9 +109,9 @@ export class ConnectionManagerService {
 		this.sockets.set(peerId, sock)
 
 		sock
-			.once('error', (err) => console.error('error socker: ', err))
+			.once('error', (err) => this.logger.error('error socker: ', err))
 			.once('close', () => {
-				console.log(
+				this.logger.log(
 					`sock close: [${this.peerManagement.self.id}] ←→ [${peerId}]`
 				)
 				this.deleteSocket(peerId)

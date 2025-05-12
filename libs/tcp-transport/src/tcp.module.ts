@@ -9,17 +9,19 @@ import { ConnectionManagerService } from '@lib/tcp-transport/components/connecti
 @Module({})
 export class TcpModule {
 	/** Static opts */
-	// static forRoot(opts: TcpOptions): DynamicModule {
-	// 	return {
-	// 		module: TcpModule,
-	// 		providers: [
-	// 			PeerManagementService,
-	// 			{ provide: 'TCP_OPTIONS', useValue: opts }, // ← кладём опции в контейнер
-	// 			TcpTransport, // ← Nest создаст инстанс сам
-	// 		],
-	// 		exports: [TcpTransport],
-	// 	}
-	// }
+	static forRoot(opts: TcpOptions): DynamicModule {
+		return {
+			module: TcpModule,
+			providers: [
+				PeerManagementService,
+				DataHandlerService,
+				ConnectionManagerService,
+				{ provide: 'TCP_OPTIONS', useValue: opts },
+				TcpTransport,
+			],
+			exports: [TcpTransport],
+		}
+	}
 
 	/** Async opts */
 	static forRootAsync(options: TcpModuleAsyncOptions): DynamicModule {

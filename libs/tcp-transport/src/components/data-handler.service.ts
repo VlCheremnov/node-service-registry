@@ -1,4 +1,4 @@
-import { forwardRef, Inject, Injectable } from '@nestjs/common'
+import { forwardRef, Inject, Injectable, Logger } from '@nestjs/common'
 import {
 	EventEmitTcpDataType,
 	TcpCommandType,
@@ -15,6 +15,8 @@ import { TcpTransport } from '@lib/tcp-transport'
 
 @Injectable()
 export class DataHandlerService {
+	private readonly logger = new Logger(DataHandlerService.name)
+
 	private drainSocketPromises = new Map<Socket, Promise<void>>()
 	private responseTimeout: number
 
@@ -41,13 +43,14 @@ export class DataHandlerService {
 	async acceptRequest(command: EventEmitTcpDataType, sock: Socket) {
 		try {
 			if (command.isResponse && command.id) {
-				console.log('Получаем ответ')
+				this.logger.log('Получаем ответ')
 				sock.emit(this.getResponseEventName(command.id), command.data)
 				return
 			}
 
-			console.log('command', command)
+			this.logger.log('command', command)
 
+			/** добавить валидацию dto */
 			const handler = this.transport.getHandler(command.type)
 			if (!handler) return
 
@@ -57,7 +60,7 @@ export class DataHandlerService {
 			resp$.subscribe(async (data) => {
 				if (data && command.id) {
 					/* Отправляем ответ обратно */
-					console.log('Отправляем ответ: ', data)
+					this.logger.log('Отправляем ответ: ', data)
 					return this.safeWrite(sock, {
 						isResponse: true,
 						type: command.type,
@@ -68,7 +71,7 @@ export class DataHandlerService {
 			})
 		} catch (err) {
 			/* bad frame — игнорируем или логируем */
-			console.error('tcp onData err', err)
+			this.logger.error('tcp onData err', err)
 		}
 	}
 
