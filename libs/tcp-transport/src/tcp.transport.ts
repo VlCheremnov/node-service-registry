@@ -40,9 +40,7 @@ export class TcpTransport extends Server implements CustomTransportStrategy {
 	 * Triggered when you run "app.listen()".
 	 */
 	listen(cb: () => void) {
-		/** Ждем пока все соединения пройдут и после вызываем callback */
 		this.connectionManager.start()
-		// setInterval(() => this.pingAll(), 2_000)
 		cb()
 	}
 

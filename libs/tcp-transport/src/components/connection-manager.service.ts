@@ -1,20 +1,27 @@
 import { forwardRef, Inject, Injectable, Logger } from '@nestjs/common'
 import { PeerManagementService } from '@lib/tcp-transport/components/peer-management.service'
 import { DataHandlerService } from '@lib/tcp-transport/components/data-handler.service'
-import { createServer, Server as NetServer, Socket } from 'net'
+import * as net from 'net'
+import * as tls from 'tls'
+import * as fs from 'fs'
+import * as path from 'path'
 import { FrameDecoderService } from '@lib/tcp-transport/components/framing.servcie'
-import { PeerInfo, TcpCommandType } from '@lib/tcp-transport/types'
+import { PeerInfo, TcpCommandType, TcpOptions } from '@lib/tcp-transport/types'
 import {
 	DEFAULT_RECONNECT_DELAY,
+	MAX_DELAY,
 	PENDING_BEFORE_CLOSING_DELAY,
 } from '@lib/tcp-transport/constants'
+type Socket = net.Socket
+type TlsServer = tls.Server
+type NetServer = net.Server
 
 @Injectable()
 export class ConnectionManagerService {
 	private readonly logger = new Logger(ConnectionManagerService.name)
 
 	private isCloseServer: boolean = false
-	private server: NetServer
+	private server: NetServer | TlsServer
 	/* Список декодеров на каждый сокет */
 	private decoders = new Map<Socket, FrameDecoderService>()
 	/* Список TCP соединений */
@@ -24,7 +31,8 @@ export class ConnectionManagerService {
 		@Inject(forwardRef(() => PeerManagementService))
 		private peerManagement: PeerManagementService,
 		@Inject(forwardRef(() => DataHandlerService))
-		private dataHandler: DataHandlerService
+		private dataHandler: DataHandlerService,
+		@Inject('TCP_OPTIONS') private readonly tcpOptions: TcpOptions
 	) {}
 
 	/** Закрытие приложения/транспорта */
@@ -59,7 +67,7 @@ export class ConnectionManagerService {
 
 	/** Создаем сервер */
 	private createServer() {
-		this.server = createServer((sock) => {
+		this.server = this.getTcpServer((sock) => {
 			const decoder = this.getDecoder(sock)
 
 			/* Создаем первое подключение между сокетами на регистрацию сокета в текущем кластере */
@@ -77,6 +85,48 @@ export class ConnectionManagerService {
 			this.logger.log(`[${this.self.id}] TCP listen ${this.self.port}`)
 		})
 	}
+
+	/** Получаем нужный сервер в зависимости от enableTLS */
+	private getTcpServer(
+		callback: (sock: Socket) => void
+	): NetServer | TlsServer {
+		if (this.tcpOptions.enableTLS) {
+			const {
+				tls: {
+					certPath = '/etc/ssl/certs/',
+					keyFileName,
+					certFileName,
+					caFileName,
+					rejectUnauthorized = false,
+				} = {},
+			} = this.tcpOptions
+
+			this.logger.log('this.tcpOptions', this.tcpOptions)
+			if (!keyFileName) {
+				throw new Error('Not filled "keyFileName"')
+			}
+
+			if (!certFileName) {
+				throw new Error('Not filled "certFileName"')
+			}
+
+			return tls.createServer(
+				{
+					key: fs.readFileSync(path.join(certPath, keyFileName)),
+					cert: fs.readFileSync(path.join(certPath, certFileName)),
+					ca: caFileName
+						? fs.readFileSync(path.join(certPath, caFileName))
+						: undefined,
+					requestCert: true,
+					rejectUnauthorized,
+				},
+				callback
+			)
+		} else {
+			return net.createServer(callback)
+		}
+	}
+
 	/** Подключаем исходящие пиры */
 	private connectDialers() {
 		for (const peer of this.peers) {
@@ -87,10 +137,16 @@ export class ConnectionManagerService {
 
 	/** Подключаемся к исходящему пиру */
 	private connectPeer(peer: PeerInfo) {
+		let reconnectDelay = DEFAULT_RECONNECT_DELAY
 		const dial = () => {
-			const sock = new Socket()
+			/* reconnection storm */
+			const delay =
+				Math.min(MAX_DELAY, (reconnectDelay *= 2)) +
+				Math.random() * 0.3 * reconnectDelay
 
-			sock.connect(peer.port, peer.host, () => {
+			const sock = this.connectionSocket(peer)
+
+			sock.once('connect', () => {
 				this.logger.log(`[${this.peerManagement.self.id}] → dial ${peer.id}`)
 				this.dataHandler.safeWrite(sock, this.peerManagement.self.id)
 			})
@@ -98,11 +154,30 @@ export class ConnectionManagerService {
 			this.registerSocket(peer.id, sock)
 
 			sock.once('close', () => {
-				setTimeout(dial, DEFAULT_RECONNECT_DELAY)
+				setTimeout(dial, delay)
 			})
 		}
 
 		dial()
+	}
+
+	private connectionSocket(peer: PeerInfo): Socket {
+		if (this.tcpOptions.enableTLS) {
+			const {
+				tls: { certPath = '/etc/ssl/certs/', caFileName, rejectUnauthorized },
+			} = this.tcpOptions
+
+			return tls.connect({
+				host: peer.host,
+				port: peer.port,
+				ca: caFileName
+					? fs.readFileSync(path.join(certPath, caFileName))
+					: undefined,
+				rejectUnauthorized,
+			})
+		} else {
+			return new net.Socket().connect(peer.port, peer.host)
+		}
 	}
 
 	/** Регистрируем сокет */

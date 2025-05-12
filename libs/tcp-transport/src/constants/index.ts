@@ -6,3 +6,4 @@ export const DRAIN_DELAY = 3_000
 export const DEFAULT_RESPONSE_TIMEOUT = 1_000
 export const DEFAULT_RECONNECT_DELAY = 2_000
 export const PENDING_BEFORE_CLOSING_DELAY = 3_000
+export const MAX_DELAY = 30_000

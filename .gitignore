@@ -1,3 +1,5 @@
+/sandbox/certs/**/**
+
 # compiled output
 **/**/dist
 **/**/node_modules

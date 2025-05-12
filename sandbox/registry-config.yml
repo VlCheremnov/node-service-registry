@@ -2,12 +2,23 @@ services:
   server:
 #    env_file:
 #      - ./.env
-    build:
-      context: .
-      dockerfile: Dockerfile
+#    build:
+#      context: .
+#      dockerfile: Dockerfile
+    image: node:20
     working_dir: /packages/service-registry
     command: npm run start:dev
+    environment:
+      - NODE_ENV=production
+      - TCP_SHARED_SECRET=9f1d8e7a3c4b2f0d1e5a6b7c8d9e0f1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7
+      - TLS_KEY_FILE_NAME=localhost+1-key.pem
+      - TLS_CERT_FILE_NAME=localhost+1.pem
+#      - TLS_CERT_PATH
+#      - CA_FILE_NAME
+      - REJECT_UNAUTHORIZED=false
+    #      - NODE_ENV=development
     volumes:
+      - ./certs:/etc/ssl/certs
       - ../apps:/packages/service-registry/apps
       - ../libs:/packages/service-registry/libs
       - ../dist:/packages/service-registry/dist

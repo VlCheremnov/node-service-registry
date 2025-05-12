@@ -34,7 +34,7 @@ async function bootstrapTestHttp() {
 	const transport = app.get(TcpTransport)
 	app.connectMicroservice({ strategy: transport })
 	await app.startAllMicroservices()
-	console.log('app.listen(80)')
+
 	await app.listen(80)
 }
 bootstrapTestHttp()

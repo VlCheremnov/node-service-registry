@@ -19,6 +19,17 @@ import defaultConfiguration from '@lib/shared/config'
 				host: configService.get<string>('tcpHost')!,
 				port: configService.get<number>('tcpPort')!,
 				peers: configService.get<string[]>('peers')!,
+				sharedSecret: configService.get<string>('tcpSharedSecret')!,
+				enableTLS: true,
+				tls: {
+					keyFileName: configService.get<string>('tlsKeyFileName')!,
+					certFileName: configService.get<string>('tlsCertFileName')!,
+					certPath: configService.get<string>('tlsCertPath'),
+					caFileName: configService.get<string | undefined>('tlsCaFileName'),
+					rejectUnauthorized: configService.get<boolean>(
+						'tlsRejectUnauthorized'
+					),
+				},
 			}),
 		}),
 	],
