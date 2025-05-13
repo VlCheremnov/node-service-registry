@@ -10,8 +10,11 @@ import { PeerInfo, TcpCommandType, TcpOptions } from '@lib/tcp-transport/types'
 import {
 	DEFAULT_RECONNECT_DELAY,
 	MAX_DELAY,
+	PEER_ID_RE,
 	PENDING_BEFORE_CLOSING_DELAY,
 } from '@lib/tcp-transport/constants'
+import { TcpTypesEnum } from '@lib/tcp-transport/enums'
+
 type Socket = net.Socket
 type TlsServer = tls.Server
 type NetServer = net.Server
@@ -68,22 +71,49 @@ export class ConnectionManagerService {
 	/** Создаем сервер */
 	private createServer() {
 		this.server = this.getTcpServer((sock) => {
-			const decoder = this.getDecoder(sock)
-
 			/* Создаем первое подключение между сокетами на регистрацию сокета в текущем кластере */
-			sock.once('data', (chunk: Buffer) => {
-				const [peerId] = decoder.push(chunk) as string[]
-				this.logger.log('once', peerId)
-				if (!/^[0-9a-f]{40}$/i.test(peerId)) {
-					sock.destroy(new Error('Bad peerId'))
-					return
+			const onData = (chunk: Buffer) => {
+				if (this.handleRegisterFrame(sock, chunk)) {
+					sock.off('data', onData)
 				}
-				this.registerSocket(peerId, sock)
-			})
+			}
+
+			sock.on('data', onData)
 		})
 		this.server.listen(this.self.port, () => {
 			this.logger.log(`[${this.self.id}] TCP listen ${this.self.port}`)
 		})
+	}
+
+	private handleRegisterFrame(sock: Socket, chunk: Buffer) {
+		const decoder = this.getDecoder(sock)
+
+		for (const frame of decoder.push(chunk)) {
+			const command = frame as TcpCommandType<{
+				peerId: string
+				ts: number
+				sign: string
+			}>
+
+			const { peerId, sign, ts } = command?.data || {}
+
+			/* Проверяем первый входящий запрос по сокету */
+			/* Если получаем невалидный запрос - вызываем ошибку и возвращаем false */
+			if (command.type !== TcpTypesEnum.RegisteredSocket)
+				return sock.destroy(new Error('Socket not registered')), false
+			if (!peerId) return sock.destroy(new Error('Not found "peerId"')), false
+			if (!PEER_ID_RE.test(peerId))
+				return sock.destroy(new Error('Bad peerId')), false
+			if (!ts) return sock.destroy(new Error('Not found "ts"')), false
+			if (!sign) return sock.destroy(new Error('Not found "sign"')), false
+			if (!this.dataHandler.verifyRegisterFrame({ peerId, sign, ts }))
+				return sock.destroy(new Error('Bad HMAC signature')), false
+
+			this.logger.log('once', peerId)
+			this.registerSocket(peerId, sock)
+
+			return true
+		}
 	}
 
 	/** Получаем нужный сервер в зависимости от enableTLS */
@@ -147,8 +177,12 @@ export class ConnectionManagerService {
 			const sock = this.connectionSocket(peer)
 
 			sock.once('connect', () => {
-				this.logger.log(`[${this.peerManagement.self.id}] → dial ${peer.id}`)
-				this.dataHandler.safeWrite(sock, this.peerManagement.self.id)
+				const selfPeerId = this.peerManagement.self.id
+				this.logger.log(`[${selfPeerId}] → dial ${peer.id}`)
+				this.dataHandler.safeWrite(sock, {
+					type: TcpTypesEnum.RegisteredSocket,
+					data: this.dataHandler.buildRegisterFrame(selfPeerId),
+				})
 			})
 
 			this.registerSocket(peer.id, sock)

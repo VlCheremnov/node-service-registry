@@ -7,3 +7,5 @@ export const DEFAULT_RESPONSE_TIMEOUT = 1_000
 export const DEFAULT_RECONNECT_DELAY = 2_000
 export const PENDING_BEFORE_CLOSING_DELAY = 3_000
 export const MAX_DELAY = 30_000
+export const PEER_ID_RE = /^[0-9a-f]{40}$/i
+export const ALLOWED_DRIFT = 60_000

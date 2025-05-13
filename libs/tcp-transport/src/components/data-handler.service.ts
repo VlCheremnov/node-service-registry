@@ -13,6 +13,7 @@ import { once } from 'node:events'
 import * as crypto from 'node:crypto'
 import { TcpTransport } from '@lib/tcp-transport'
 import {
+	ALLOWED_DRIFT,
 	DEFAULT_RESPONSE_TIMEOUT,
 	DRAIN_DELAY,
 	RESPONSE_PREFIX,
@@ -122,10 +123,7 @@ export class DataHandlerService {
 	}
 
 	/** Отправляем сообщение */
-	public async safeWrite(
-		sock: Socket,
-		data: string | number | Record<any, any>
-	) {
+	public async safeWrite(sock: Socket, data: TcpCommandType) {
 		/**
 		 * Если send-буфер забит, то ждем "drain".
 		 * "drain" гарантирует, что ОС освободила место для следующих пакетов
@@ -164,5 +162,36 @@ export class DataHandlerService {
 	/** Подчищаем неиспользуемые промисы */
 	public cleanupDrainSocket(sock: Socket) {
 		this.drainSocketPromises.delete(sock)
+	}
+
+	public buildRegisterFrame(peerId: string) {
+		const ts = Date.now()
+		const sign = this.createSign(`${peerId}:${ts}`)
+
+		return { peerId, ts, sign }
+	}
+
+	// проверка
+	public verifyRegisterFrame(frame: {
+		peerId: string
+		ts: number
+		sign: string
+	}) {
+		const { peerId, ts, sign } = frame
+
+		if (Math.abs(Date.now() - ts) > ALLOWED_DRIFT) {
+			return false
+		}
+
+		const expect = this.createSign(`${peerId}:${ts}`)
+
+		return sign === expect
+	}
+
+	private createSign(str: string) {
+		return crypto
+			.createHmac('sha256', this.cfg.sharedSecret)
+			.update(str)
+			.digest('hex')
 	}
 }
