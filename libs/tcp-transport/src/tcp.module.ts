@@ -34,7 +34,7 @@ export class TcpModule {
 				ConnectionManagerService,
 				{
 					provide: 'TCP_OPTIONS',
-					useFactory: options.useFactory, // ← получаем opts из async-функции
+					useFactory: options.useFactory,
 					inject: options.inject || [],
 				},
 				TcpTransport,

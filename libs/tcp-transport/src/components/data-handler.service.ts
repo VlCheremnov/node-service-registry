@@ -90,6 +90,7 @@ export class DataHandlerService {
 
 		await this.safeWrite(sock, { ...payload, id } as TcpCommandType)
 
+		/* Возвращаем ответ, если он есть*/
 		return new Promise(async (resolve, reject) => {
 			const event = this.getResponseEventName(id)
 			const ac = new AbortController()

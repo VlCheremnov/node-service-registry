@@ -32,7 +32,7 @@ export class TcpTransport extends Server implements CustomTransportStrategy {
 		super()
 	}
 
-	public getHandler(type: TcpTypesEnum) {
+	public getHandler(type: string) {
 		return this.messageHandlers.get(type)
 	}
 

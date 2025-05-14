@@ -3,6 +3,7 @@ import { AppService } from './app.service'
 import { TcpTypesEnum } from '@lib/tcp-transport/enums'
 import { TcpTransport } from '@lib/tcp-transport'
 import { Data, FromId, TcpEvent } from '@lib/tcp-transport/decorators'
+import { TransportType } from './enums'
 
 @Controller()
 export class AppController {
@@ -16,7 +17,7 @@ export class AppController {
 		return this.appService.ping()
 	}
 
-	@TcpEvent(TcpTypesEnum.Default)
+	@TcpEvent(TransportType.Default)
 	TestTcpEvent(@Data() data: any, @FromId() fromId: string) {
 		console.log('test true', data)
 		console.log('fromId', fromId)
@@ -27,7 +28,7 @@ export class AppController {
 	@Post('/test')
 	async test() {
 		const test = await this.tcp.broadcast({
-			type: TcpTypesEnum.Default,
+			type: TransportType.Default,
 			data: { test: 'test command' },
 		})
 		console.log('test', test)

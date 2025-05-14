@@ -1,4 +1,3 @@
-import { TcpTypesEnum } from '@lib/tcp-transport/enums'
 import { ModuleMetadata } from '@nestjs/common'
 
 export interface PeerInfo {
@@ -10,7 +9,7 @@ export interface PeerInfo {
 export interface TcpCommandType<Payload = Record<any, any>> {
 	isResponse?: boolean
 	id?: string
-	type: TcpTypesEnum
+	type: string
 	ts?: number
 	data?: Payload
 }

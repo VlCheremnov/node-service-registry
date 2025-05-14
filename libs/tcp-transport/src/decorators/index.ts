@@ -1,13 +1,12 @@
 import { createParamDecorator, ExecutionContext } from '@nestjs/common'
 import { MessagePattern } from '@nestjs/microservices'
-import { TcpTypesEnum } from '@lib/tcp-transport/enums'
 import { EventEmitTcpDataType } from '@lib/tcp-transport/types'
 
 /**
  * Проксирует Nest-декоратор MessagePattern
  * и одновременно ограничивает аргумент типом enum.
  */
-export function TcpEvent(event: TcpTypesEnum): MethodDecorator {
+export function TcpEvent(event: string): MethodDecorator {
 	return MessagePattern(event)
 }
 
