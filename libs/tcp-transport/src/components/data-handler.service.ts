@@ -54,7 +54,6 @@ export class DataHandlerService {
 
 			this.logger.log('command', command)
 
-			/** добавить валидацию dto */
 			const handler = this.transport.getHandler(command.type)
 			if (!handler) return
 

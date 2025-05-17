@@ -49,6 +49,9 @@ export class ConnectionManagerService {
 		for (const s of this.sockets.values()) {
 			s.destroy()
 		}
+		for (const d of this.decoders.values()) {
+			d.reset()
+		}
 		this.sockets.clear()
 		this.decoders.clear()
 		this.server.close()

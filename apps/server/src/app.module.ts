@@ -1,9 +1,9 @@
 import { Module } from '@nestjs/common'
-import { AppController } from './app.controller'
-import { AppService } from './app.service'
 import { TcpModule } from '@lib/tcp-transport/tcp.module'
 import { ConfigModule, ConfigService } from '@nestjs/config'
 import defaultConfiguration from '@lib/shared/config'
+import { GossipService } from './gossip/gossip.service'
+import { AgentModule } from './agent/agent.module'
 
 @Module({
 	imports: [
@@ -32,8 +32,8 @@ import defaultConfiguration from '@lib/shared/config'
 				},
 			}),
 		}),
+		AgentModule,
 	],
-	controllers: [AppController],
-	providers: [AppService],
+	controllers: [],
 })
 export class AppModule {}

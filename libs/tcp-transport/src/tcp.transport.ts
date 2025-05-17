@@ -32,10 +32,6 @@ export class TcpTransport extends Server implements CustomTransportStrategy {
 		super()
 	}
 
-	public getHandler(type: string) {
-		return this.messageHandlers.get(type)
-	}
-
 	/**
 	 * Triggered when you run "app.listen()".
 	 */
@@ -58,6 +54,18 @@ export class TcpTransport extends Server implements CustomTransportStrategy {
 	}
 	unwrap<T = never>(): T {
 		throw new Error('Method not implemented.')
+	}
+
+	/** Карта хендлеров, которые использует доп модули */
+	public getHandler(type: string) {
+		return this.messageHandlers.get(type)
+	}
+
+	public get getOtherPeers() {
+		return this.peerManagement.peers
+	}
+	public get getSelfPeer() {
+		return this.peerManagement.self
 	}
 
 	/** Пингуем все сокеты (Оставим для тестов) */
@@ -83,13 +91,13 @@ export class TcpTransport extends Server implements CustomTransportStrategy {
 	}
 
 	/** Отправить сообщение по id сокета */
-	public sendToPeer(peerId: string, obj: TcpCommandType) {
+	public sendToPeer<T = any>(peerId: string, obj: TcpCommandType) {
 		const sock = this.connectionManager.getSocket(peerId)
 
 		if (!sock) {
 			throw new Error('Socket is not defined')
 		}
 
-		return this.dataHandler.sendMessage(sock, obj, peerId)
+		return this.dataHandler.sendMessage<T>(sock, obj, peerId)
 	}
 }

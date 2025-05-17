@@ -7,10 +7,15 @@ export interface PeerInfo {
 }
 
 export interface TcpCommandType<Payload = Record<any, any>> {
+	/* Ответ/запрос */
 	isResponse?: boolean
+	/* Трассировка запроса */
 	id?: string
+	/* Тип команды */
 	type: string
+	/* Временная метка */
 	ts?: number
+	/* Тело запроса */
 	data?: Payload
 }
 
