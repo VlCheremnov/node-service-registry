@@ -2,8 +2,7 @@ import { Module } from '@nestjs/common'
 import { TcpModule } from '@lib/tcp-transport/tcp.module'
 import { ConfigModule, ConfigService } from '@nestjs/config'
 import defaultConfiguration from '@lib/shared/config'
-import { GossipService } from './gossip/gossip.service'
-import { AgentModule } from './agent/agent.module'
+import { GossipModule } from './gossip/gossip.module'
 
 @Module({
 	imports: [
@@ -32,7 +31,7 @@ import { AgentModule } from './agent/agent.module'
 				},
 			}),
 		}),
-		AgentModule,
+		GossipModule,
 	],
 	controllers: [],
 })

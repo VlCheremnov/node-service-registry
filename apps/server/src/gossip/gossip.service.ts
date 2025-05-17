@@ -94,6 +94,10 @@ export class GossipService implements OnModuleInit, OnModuleDestroy {
 	) {
 		const service = this.state.get(record.id)
 
+		if (record.version && service && record.version < service.version) {
+			return
+		}
+
 		/** Если версия пришли извне, то обновляем запись и сохраняем, иначе обновляем текущую или сохраняем 1 по дефолту */
 		const version = record.version || (service ? service.version + 1 : 1)
 
@@ -109,6 +113,11 @@ export class GossipService implements OnModuleInit, OnModuleDestroy {
 		this.logger.debug(
 			`Local service "${service}" updated → version ${next.version}`
 		)
+	}
+	public upsertManyLocalService(
+		records: MakeOptional<ServiceRecordType, 'ownerId' | 'version'>[]
+	) {
+		records.forEach((service) => this.upsertLocalService(service))
 	}
 
 	/** Выбираем случайного соседа и рассылаем digest */
