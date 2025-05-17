@@ -93,7 +93,11 @@ export class GossipService implements OnModuleInit, OnModuleDestroy {
 		record: MakeOptional<ServiceRecordType, 'ownerId' | 'version'>
 	) {
 		const service = this.state.get(record.id)
+
+		/** Если версия пришли извне, то обновляем запись и сохраняем, иначе обновляем текущую или сохраняем 1 по дефолту */
 		const version = record.version || (service ? service.version + 1 : 1)
+
+		/** Обновленная запись */
 		const next = {
 			...record,
 			version,
